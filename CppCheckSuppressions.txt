@@ -1,0 +1,4 @@
+*:*/externals/*
+unknownMacro:*
+noExplicitConstructor:*
+functionStatic:*

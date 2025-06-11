@@ -1,0 +1,7 @@
+/build
+/nbproject
+/rpmbuild
+/.vscode
+CMakeLists.txt.user
+/externals/google-benchmark
+/externals/netpacker
