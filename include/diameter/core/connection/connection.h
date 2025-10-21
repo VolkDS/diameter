@@ -7,10 +7,10 @@
 
 namespace diameter::core::connection {
 
-class IConnection
+class Connection
 {
 public:
-    virtual ~IConnection() = default;
+    virtual ~Connection() = default;
 
     using OnRecvMessageCb = std::function<void(message::Message&&)>;
     using OnDisconnectCb = std::function<void()>;
@@ -22,9 +22,8 @@ public:
 
     virtual void set_on_recv_message_cb(OnRecvMessageCb&& callback) = 0;
     virtual void set_on_disconnect_cb(OnDisconnectCb&& callback) = 0;
-
 };
 
-} // namespace diameter::core
+} // namespace diameter::core::connection
 
 #endif

@@ -13,13 +13,14 @@ class StateMachine
 {
 public:
     using transition_table_key_t = std::pair<StateT, EventT>;
-    using action_t = void(ContextT::*)(UserDataT);
+    using action_t = void (ContextT::*)(UserDataT);
     using transition_table_value_t = std::pair<StateT, action_t>;
 
     using transition_table_t = std::map<transition_table_key_t, transition_table_value_t>;
     using action_table_t = std::map<StateT, action_t>;
 
-    explicit StateMachine(ContextT *context, const StateT& initial_state, const transition_table_t* transition_table)
+    explicit StateMachine(ContextT* context, const StateT& initial_state,
+        const transition_table_t* transition_table)
         : m_context(context),
           m_current_state(initial_state),
           m_transition_table(transition_table),

@@ -12,8 +12,8 @@ namespace diameter::core::peer {
 struct PeerInfo
 {
     using application_ids_type = std::set<message::header::ApplicationId>;
-    using vendor_specific_application_ids_type = std::set<
-        std::pair<message::avp::VendorId, message::header::ApplicationId>>;
+    using vendor_specific_application_ids_type
+        = std::set< std::pair<message::avp::VendorId, message::header::ApplicationId>>;
 
     std::string origin_host;
     std::string origin_realm;

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+    <!-- Основной корневой элемент -->
+    <xs:element name="DiameterMessage">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="Header" type="HeaderType"/>
+                <xs:element name="AVPs" type="AVPsType"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Тип для заголовка -->
+    <xs:complexType name="HeaderType">
+        <xs:sequence>
+            <xs:element name="Version" type="xs:positiveInteger"/>
+            <xs:element name="MessageLength" type="xs:positiveInteger"/>
+            <xs:element name="CommandFlags" type="CommandFlagsType"/>
+            <xs:element name="CommandCode" type="xs:positiveInteger"/>
+            <xs:element name="ApplicationId" type="xs:positiveInteger"/>
+            <xs:element name="HopByHopId" type="xs:unsignedLong"/>
+            <xs:element name="EndToEndId" type="xs:unsignedLong"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- Тип для флагов команды -->
+    <xs:complexType name="CommandFlagsType">
+        <xs:sequence>
+            <xs:element name="Request" type="xs:boolean"/>
+            <xs:element name="Proxiable" type="xs:boolean"/>
+            <xs:element name="Error" type="xs:boolean"/>
+            <xs:element name="Retransmit" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- Тип для контейнера AVP -->
+    <xs:complexType name="AVPsType">
+        <xs:sequence>
+            <xs:element name="AVP" type="AVPType" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- Базовый тип для AVP -->
+    <xs:complexType name="AVPType" mixed="true">
+        <xs:sequence>
+            <xs:element name="AVP" type="AVPType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="code" type="xs:positiveInteger" use="required"/>
+        <xs:attribute name="mandatory" type="xs:boolean" use="required"/>
+        <xs:attribute name="protected" type="xs:boolean" use="required"/>
+        <xs:attribute name="vendor_id" type="xs:positiveInteger" use="optional"/>
+        <xs:attribute name="type" use="required">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:enumeration value="UTF8String"/>
+                    <xs:enumeration value="Integer32"/>
+                    <xs:enumeration value="Integer64"/>
+                    <xs:enumeration value="Unsigned32"/>
+                    <xs:enumeration value="Unsigned64"/>
+                    <xs:enumeration value="Float32"/>
+                    <xs:enumeration value="Float64"/>
+                    <xs:enumeration value="Grouped"/>
+                    <xs:enumeration value="Address"/>
+                    <xs:enumeration value="Time"/>
+                    <xs:enumeration value="OctetString"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+    </xs:complexType>
+
+</xs:schema>

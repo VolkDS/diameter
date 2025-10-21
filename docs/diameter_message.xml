@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DiameterMessage>
+<Header>
+    <Version>1</Version>
+    <MessageLength>255</MessageLength>
+    <CommandFlags>
+        <Request>true</Request>
+        <Proxiable>false</Proxiable>
+        <Error>false</Error>
+        <Retransmit>false</Retransmit>
+    </CommandFlags>
+    <CommandCode>265</CommandCode>
+    <ApplicationId>4</ApplicationId>
+    <HopByHopId>305419896</HopByHopId>
+    <EndToEndId>2271560481</EndToEndId>
+</Header>
+<AVPs>
+	<AVP code="404" mandatory="true" protected="false" type="UTF8String">test</AVP>
+	<AVP code="404" mandatory="true" protected="false" vendor_id="10415" type="Grouped">
+        <AVP code="500" mandatory="true" protected="false" vendor_id="10415" type="UTF8String">test</AVP>
+        <AVP code="222" mandatory="true" protected="false" vendor_id="10415" type="Unsigned32">10415</AVP>
+    </AVP>
+</AVPs>
+</DiameterMessage>

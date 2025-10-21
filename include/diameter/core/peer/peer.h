@@ -4,7 +4,7 @@
 #include <string>
 #include <variant>
 
-#include <diameter/core/connection/iconnection.h>
+#include <diameter/core/connection/connection.h>
 #include <diameter/core/fsm.h>
 #include <diameter/core/peer/info.h>
 #include <diameter/core/peer/ipeer.h>
@@ -26,7 +26,7 @@ public:
         CLOSING
     };
 
-    enum class Events: uint32_t
+    enum class Events : uint32_t
     {
         START,
         R_CONN_CER,
@@ -53,7 +53,7 @@ public:
     };
 
     using identity_t = std::string;
-    using connection_t = diameter::core::connection::IConnection;
+    using connection_t = diameter::core::connection::Connection;
     using connection_ptr = std::shared_ptr<connection_t>;
     using fsm_user_data_t = std::variant<connection_ptr, std::nullptr_t>;
     using fsm_t = diameter::core::StateMachine<States, Events, Peer, fsm_user_data_t&&>;
@@ -100,12 +100,11 @@ public:
 
     void initiator_recv_non_CEA();
     void win_election();
-  
+
     void send_message(message_t&& message)
     {
         bool processed = m_fsm.process_event(Events::SEND_MESSAGE);
         if (!processed) {
-
         }
     }
 
@@ -114,7 +113,7 @@ public:
     void responder_recv_DWA();
     void responder_recv_DPR();
     void responder_recv_DPA();
-    
+
     void initiator_recv_message();
     void initiator_recv_DWR();
     void initiator_recv_DWA();
@@ -131,7 +130,8 @@ private:
         m_initiator->start();
     }
 
-    // The incoming connection associated with the R_Conn_CER is accepted as the responder connection.
+    // The incoming connection associated with the R_Conn_CER is accepted as the responder
+    // connection.
     void responder_accept(fsm_user_data_t&& ud)
     {
         m_responder = std::get<connection_ptr>(std::move(ud));

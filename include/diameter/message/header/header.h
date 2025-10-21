@@ -28,7 +28,7 @@ struct Header
     Header(Header&&) = default;
     Header& operator= (Header&&) = default;
 
-    constexpr MessageLength size() const
+    static constexpr MessageLength size()
     {
         return sizeof(ProtocolVersion)
             + sizeof(MessageLength) - 1

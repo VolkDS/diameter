@@ -1,8 +1,8 @@
 #ifndef DIAMETER_CORE_CONFIG_CONFIG_H
 #define DIAMETER_CORE_CONFIG_CONFIG_H
 
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
 #include <list>
 #include <map>
 #include <string>
@@ -36,8 +36,9 @@ enum class AddrType : uint32_t
     SCTP
 };
 
-struct Addr {
-    std::list<std::string> host;
+struct Addr
+{
+    std::vector<std::string> host;
     uint16_t port = 0;
     AddrType type = AddrType::TCP;
 
@@ -48,54 +49,64 @@ struct Addr {
 
     bool operator!= (const Addr& rhs) const noexcept
     {
-        return !operator==(rhs);
+        return !operator== (rhs);
     }
 };
 
-struct LocalPeerConfig {
+struct LocalPeerConfig
+{
     peer::PeerInfo info;
 };
 
-struct PeerConfig {
+struct PeerConfig
+{
     peer::IPeer::Role role = peer::IPeer::Role::INITIATOR;
 
-    //Local side
+    // Local side
     std::string local_peer_name;
     Addr local_addr;
-  
-    //Remote side
+
+    // Remote side
     std::string remote_host;
     std::string remote_realm;
     Addr remote_addr;
 
-    //Security
+    // Security
     bool use_tls = false;
 
-    //Timers
-    peer::IPeer::Duration reconnect_timeout = std::chrono::seconds{10};
-    peer::IPeer::Duration watchdog_timeout = std::chrono::seconds{30};
-    peer::IPeer::Duration request_timeout = std::chrono::seconds{1};
-
+    // Timers
+    peer::IPeer::Duration reconnect_timeout = std::chrono::seconds {10};
+    peer::IPeer::Duration watchdog_timeout = std::chrono::seconds {30};
+    peer::IPeer::Duration request_timeout = std::chrono::seconds {1};
 };
 
-struct AcceptorConfig {
+struct AcceptorConfig
+{
     std::string name;
 
+    // Local side
     LocalPeerConfig local_peer_name;
-    std::list<std::string> local_addrs;
-    uint16_t local_port = 0;
+    Addr local_addr;
 
+    // Security
     bool use_tls = false;
+
+    // Timers
+    peer::IPeer::Duration capability_timeout = std::chrono::seconds {5};
+
+    // Options
+    bool allow_dynamic_peers = false;
 };
 
-struct Config {
+struct Config
+{
     using Acceptors = std::unordered_map<std::string, AcceptorConfig>;
     using LocalPeers = std::unordered_map<std::string, LocalPeerConfig>;
     using Peers = std::unordered_map<std::string, PeerConfig>;
 
     bool empty() const noexcept
     {
-        return (acceptors.empty() && peers.empty());
+        return (acceptors.empty() && local_peers.empty() && peers.empty());
     }
 
     Acceptors acceptors;
