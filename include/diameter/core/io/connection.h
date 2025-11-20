@@ -28,7 +28,7 @@ public:
     using RawDataType = std::vector<uint8_t>;
     using MessagePtr = std::shared_ptr<message::Message>;
 
-    using OnRecvMessageCb = std::function<void(message::Message&&)>;
+    using OnRecvMessageCb = std::function<void(MessagePtr&&)>;
     using OnDisconnectCb = std::function<void(const boost::system::error_code&)>;
 
     Connection(Connection const&) = delete;
@@ -197,8 +197,8 @@ private:
                 return;
             }
 
-            auto message = message::Message {};
-            message.header = std::move(header);
+            auto message = std::make_shared<message::Message>();
+            message->header = std::move(header);
 
             call_on_recv_message_cb(std::move(message));
             start_recv_header();
@@ -224,7 +224,8 @@ private:
             auto pos = m_message_buffer.begin();
             auto message = netpacker::get<message::Message>(pos, m_message_buffer.end());
 
-            call_on_recv_message_cb(std::move(message));
+            auto ptr = std::make_shared<message::Message>(std::move(message));
+            call_on_recv_message_cb(std::move(ptr));
             start_recv_header();
         }
         catch (const std::exception& e) {
@@ -288,7 +289,7 @@ private:
         start_send();
     }
 
-    void call_on_recv_message_cb(message::Message&& message)
+    void call_on_recv_message_cb(MessagePtr&& message)
     {
         OnRecvMessageCb recv_message_cb;
         {

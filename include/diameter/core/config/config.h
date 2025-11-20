@@ -51,6 +51,11 @@ struct Addr
     {
         return !operator== (rhs);
     }
+
+    bool empty() const noexcept
+    {
+        return host.empty();
+    }
 };
 
 struct LocalPeerConfig

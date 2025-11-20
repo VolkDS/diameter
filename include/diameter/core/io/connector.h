@@ -45,10 +45,20 @@ public:
         if (m_running.exchange(true)) {
             return;
         }
+
+        if (!m_src_address.empty()) {
+            start_local_bind();
+        }
+        else {
+            start_connect();
+        }
     }
 
     void stop()
     {
+        if (!m_running.exchange(false)) {
+            return;
+        }
     }
 
     void set_on_connect_cb(OnConnectCb&& handler)
@@ -70,8 +80,143 @@ private:
           m_resolver(ioc),
           m_timer(ioc),
           m_src_address(src_address),
-          m_running(false)
+          m_running(false),
+          m_stopped(false)
     {
+    }
+
+    bool is_running() const noexcept
+    {
+        return m_running.load() && !m_stopped.load();
+    }
+
+    bool is_stopped() const noexcept
+    {
+        return m_stopped.load();
+    }
+
+    void start_local_bind()
+    {
+        ResolverQueryType query(m_src_address.host[0],
+            std::to_string(static_cast<unsigned int>(m_src_address.port)));
+
+        auto self = shared_from_this();
+        m_resolver.async_resolve(query, [self](auto&&... args) {
+            self->on_src_address_resolve_handler(std::forward<decltype(args)>(args)...);
+        });
+    }
+
+    void on_src_address_resolve_handler(const boost::system::error_code& error, ResolverIterType iterator)
+    {
+        if (is_stopped()) {
+            return;
+        }
+
+        if (error) {
+            start_timer();
+            return;
+        }
+
+        if (iterator == ResolverType::iterator()) {
+            start_timer();
+            return;
+        }
+
+        for (auto it = iterator; it != ResolverType::iterator(); ++it) {
+            EndpointType endpoint = it->endpoint();
+            try {
+                m_socket.open(endpoint.protocol());
+                m_socket.set_option(boost::asio::socket_base::reuse_address(true));
+                m_socket.bind(endpoint);
+
+                // Success - start connection and break
+                start_connect();
+                return;
+            }
+            catch (const boost::system::system_error& ex) {
+                std::cerr << "Bind failed for " << endpoint.address().to_string() << ": " << ex.what() << std::endl;
+                continue;
+            }
+        }
+
+        // All endpoints failed
+        start_timer();
+    }
+
+    void start_connect()
+    {
+        ResolverQueryType query(m_dst_address.host[0],
+            std::to_string(static_cast<unsigned int>(m_dst_address.port)));
+
+        auto self = shared_from_this();
+        m_resolver.async_resolve(query, [self](auto&&... args) {
+            self->on_dst_address_resolve_handler(std::forward<decltype(args)>(args)...);
+        });
+    }
+
+    void on_dst_address_resolve_handler(const boost::system::error_code& error, ResolverIterType iterator)
+    {
+        if (is_stopped()) {
+            return;
+        }
+
+        if (error) {
+            start_timer();
+            return;
+        }
+
+    }
+
+    void async_connect(ResolverIterType iterator)
+    {
+        if (iterator == ResolverType::iterator()) {
+            start_timer();
+            return;
+        }
+
+        EndpointType endpoint = iterator->endpoint();
+        auto self = shared_from_this();
+        m_socket.async_connect(endpoint, [self, iterator](auto&&... args) {
+            self->on_async_connect_handler(iterator, std::forward<decltype(args)>(args)...);
+        });
+    }
+
+    void on_async_connect_handler(ResolverIterType iterator, const boost::system::error_code& error)
+    {
+        if (is_stopped()) {
+            return;
+        }
+
+        if (error) {
+            async_connect(iterator++);
+            return;
+        }
+
+        call_on_connect_cb(error);
+    }
+
+    void start_timer()
+    {
+        // TODO: config
+        auto self = shared_from_this();
+        m_timer.expires_from_now(std::chrono::seconds(1));
+        m_timer.async_wait([self](auto&&... args) {
+            self->on_timer(std::forward<decltype(args)>(args)...);
+        });
+    }
+
+    void on_timer(const boost::system::error_code& error)
+    {
+        if (is_stopped() || error == boost::asio::error::operation_aborted) {
+            return;
+        }
+
+        if (!m_src_address.empty()) {
+            start_local_bind();
+        }
+        else {
+            start_connect();
+        }
     }
 
     void call_on_connect_cb(const boost::system::error_code& error)
@@ -83,10 +228,11 @@ private:
         }
 
         if (connect_cb) {
-            boost::asio::post(m_socket.get_executor(), [connect_cb = std::move(connect_cb), error,
-                                                           socket = std::move(m_socket)]() mutable {
-                connect_cb(error, std::move(socket));
-            });
+            boost::asio::post(m_socket.get_executor(),
+                [connect_cb = std::move(connect_cb), error, socket = std::move(m_socket)]() mutable {
+                    connect_cb(error, std::move(socket));
+                }
+            );
         }
     }
 
@@ -96,6 +242,7 @@ private:
     AddrType m_dst_address;
     AddrType m_src_address;
     std::atomic_bool m_running;
+    std::atomic_bool m_stopped;
 
     std::mutex m_callback_mutex;
     OnConnectCb m_on_connect_cb;
