@@ -3,7 +3,6 @@
 
 #include <diameter/application/application.h>
 #include <diameter/core/core.h>
-#include <diameter/core/fsm.h>
 #include <diameter/message/message.h>
 #include <diameter/serial/serial.h>
 
