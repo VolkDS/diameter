@@ -2,7 +2,7 @@
 
 namespace diameter::core::peer {
 
-const Peer::fsm_transition_table_t Peer::m_fsm_transition_table {
+const Peer::FsmTransitionTableType Peer::m_fsm_transition_table {
     {{States::CLOSED, Events::START},      {States::WAIT_CONN_ACK, &Peer::initiator_start_connection}},
     {{States::CLOSED, Events::R_CONN_CER}, {States::ROPEN,         &Peer::responder_accept}},
 
@@ -14,7 +14,11 @@ const Peer::fsm_transition_table_t Peer::m_fsm_transition_table {
     {{States::WAIT_CEA, Events::I_RCV_CEA},     {States::IOPEN,        &Peer::process_CEA}},
     {{States::WAIT_CEA, Events::R_CONN_CER},    {States::WAIT_RETURNS, &Peer::responder_accept}},
     {{States::WAIT_CEA, Events::I_PEER_DISC},   {States::CLOSED,       &Peer::initiator_disconnect}},
-    {{States::WAIT_CEA, Events::I_RCV_NON_CEA}, {States::CLOSED,       &Peer::error}},
+    {{States::WAIT_CEA, Events::I_RCV_DPA},     {States::CLOSED,       &Peer::error}},
+    {{States::WAIT_CEA, Events::I_RCV_DPR},     {States::CLOSED,       &Peer::error}},
+    {{States::WAIT_CEA, Events::I_RCV_DWA},     {States::CLOSED,       &Peer::error}},
+    {{States::WAIT_CEA, Events::I_RCV_DWR},     {States::CLOSED,       &Peer::error}},
+    {{States::WAIT_CEA, Events::I_RCV_MESSAGE}, {States::CLOSED,       &Peer::error}},
     {{States::WAIT_CEA, Events::TIMEOUT},       {States::CLOSED,       &Peer::error}},
 
     {{States::ELECT, Events::I_RCV_CONN_ACK},  {States::WAIT_RETURNS,  &Peer::initiator_send_CER}},
