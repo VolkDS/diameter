@@ -14,7 +14,7 @@
 #include <diameter/core/io/acceptor.h>
 #include <diameter/core/io/connection.h>
 #include <diameter/core/io/connector.h>
-#include <diameter/core/peer/ipeer.h>
+#include <diameter/core/peer/peer.h>
 
 namespace diameter::core::manager {
 
@@ -22,8 +22,10 @@ class Manager
 {
 public:
     using AcceptorPtr = std::shared_ptr<io::Acceptor>;
+    using ConnectionPtr = std::shared_ptr<io::Connection>;
     using ConnectorPtr = std::shared_ptr<io::Connector>;
-    using PeerPtr = std::shared_ptr<peer::IPeer>;
+    using PeerPtr = std::shared_ptr<peer::Peer>;
+    using IPeerPtr = std::shared_ptr<peer::IPeer>;
 
     using OnRecvMessageCb = std::function<void(message::Message&&, const peer::IPeer&)>;
     using OnPeerStateCb = std::function<void(const peer::IPeer&)>;
@@ -47,9 +49,9 @@ public:
         m_config = std::move(conf);
 
         for (auto it = m_acceptors.begin(); it != m_acceptors.end();) {
-            auto& name = it->first;
+            auto& acceptor_name = it->first;
             auto& acceptor = it->second;
-            auto is_removed = (m_config.acceptors.find(name) == m_config.acceptors.end());
+            auto is_removed = (m_config.acceptors.find(acceptor_name) == m_config.acceptors.end());
 
             if (is_removed) {
                 acceptor->stop();
@@ -62,18 +64,19 @@ public:
         }
 
         for (const auto& pair : m_config.acceptors) {
-            if (m_acceptors.find(pair.first) == m_acceptors.end()) {
-                auto& acceptor_conf = pair.second;
-                create_acceptor(pair.first, acceptor_conf);
+            auto& acceptor_name = pair.first;
+            auto& acceptor_config = pair.second;
+            if (m_acceptors.find(acceptor_name) == m_acceptors.end()) {
+                create_acceptor(acceptor_name, acceptor_config);
             }
         }
 
         for (auto it = m_connectors.begin(); it != m_connectors.end();) {
-            auto& name = it->first;
+            auto& peer_name = it->first;
             auto& connector = it->second;
 
             // Try to find peer in config with connector name
-            auto peer_it = m_config.peers.find(name);
+            auto peer_it = m_config.peers.find(peer_name);
             auto is_removed = (peer_it == m_config.peers.end());
 
             if (is_removed) {
@@ -91,10 +94,10 @@ public:
         }
 
         for (auto it = m_peers.begin(); it != m_peers.end();) {
-            auto& name = it->first;
+            auto& peer_name = it->first;
             auto& peer = it->second;
 
-            auto peer_it = m_config.peers.find(name);
+            auto peer_it = m_config.peers.find(peer_name);
             auto is_removed = (peer_it == m_config.peers.end());
             if (is_removed) {
                 peer->stop();
@@ -107,11 +110,13 @@ public:
         }
 
         for (const auto& pair : m_config.peers) {
-            if (m_peers.find(pair.first) == m_peers.end()) {
-                auto& peer_conf = pair.second;
+            auto& peer_name = pair.first;
+            auto& peer_config = pair.second;
+
+            if (m_peers.find(peer_name) == m_peers.end()) {
                 auto& local_peer_conf = m_config.local_peers.at(
-                    peer_conf.local_peer_name); // TODO: need validate it early
-                create_peer(pair.first, local_peer_conf, peer_conf);
+                    peer_config.local_peer_name); // TODO: need validate it early
+                create_peer(peer_name, local_peer_conf, peer_config);
             }
         }
     }
@@ -142,7 +147,7 @@ private:
 
         auto acceptor = io::Acceptor::create(m_ioc, acceptor_config.local_addr);
         acceptor->set_on_accept_cb([](const boost::system::error_code& error,
-                                       io::Acceptor::SocketType&& socket) {
+                                       io::Acceptor::SocketType&& /*socket*/) {
             if (error) {
                 return;
             }
@@ -154,11 +159,36 @@ private:
     void create_peer(const std::string& name, const config::LocalPeerConfig& local_peer_config,
         const config::PeerConfig& peer_config)
     {
+        // TODO create_peer
+        auto peer = peer::Peer::create(local_peer_config.info.origin_host, local_peer_config.info.origin_realm,
+            peer_config.remote_host, peer_config.remote_realm);
+        m_peers.insert({name, peer});
+
+        // and create connector for it if need
+        if (peer_config.role == peer::IPeer::Role::INITIATOR) {
+            create_connector(name, local_peer_config, peer_config);
+        }
     }
 
     void create_connector(const std::string& name, const config::LocalPeerConfig& local_peer_config,
         const config::PeerConfig& peer_config)
     {
+        if (peer_config.remote_addr.type != config::AddrType::TCP) {
+            throw std::runtime_error("Unsupported address type");
+        }
+
+        auto connector = io::Connector::create(m_ioc, peer_config.remote_addr, peer_config.local_addr);
+        connector->set_on_connect_cb([](const boost::system::error_code& error,
+                                       io::Connector::SocketType&& socket) {
+            if (error) {
+                return;
+            }
+
+            auto connection = io::Connection::create(std::move(socket));
+
+        });
+        connector->run();
+        m_connectors.insert({name, connector});
     }
 
 private:
