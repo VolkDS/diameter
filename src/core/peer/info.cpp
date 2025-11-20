@@ -1,4 +1,5 @@
 #include <diameter/core/peer/info.h>
+#include <diameter/application/base/avp.h>
 
 namespace diameter::core::peer {
 
@@ -47,7 +48,7 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
     auto peer_info = PeerInfo{};
     for (const auto& avp : message->avps) {
         // Origin-Host
-        if (avp.code == 264) {
+        if (avp.code == application::base::AvpCodeV::OriginHost) {
             auto value = serial::avp::value_as<message::avp::DiameterIdentity>(avp.value);
             if (!peer_info.origin_host.empty()) {
                 throw AvpOccursTooManyTimes("Duplicate Origin-Host");
@@ -56,7 +57,7 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
         }
 
         // Origin-Realm
-        if (avp.code == 296) {
+        if (avp.code == application::base::AvpCodeV::OriginRealm) {
             auto value = serial::avp::value_as<message::avp::DiameterIdentity>(avp.value);
             if (!peer_info.origin_realm.empty()) {
                 throw AvpOccursTooManyTimes("Duplicate Origin-Realm");
@@ -65,16 +66,16 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
         }
 
         // Vendor-Id
-        if (avp.code == 266) {
+        if (avp.code == application::base::AvpCodeV::VendorId) {
             auto value = serial::avp::value_as<message::avp::Unsigned32>(avp.value);
-            if (!peer_info.origin_realm.empty()) {
+            if (peer_info.vendor_id > 0) {
                 throw AvpOccursTooManyTimes("Duplicate Vendor-Id");
             }
             peer_info.vendor_id = *value;
         }
 
         // Product-Name
-        if (avp.code == 269) {
+        if (avp.code == application::base::AvpCodeV::ProductName) {
             auto value = serial::avp::value_as<message::avp::UTF8String>(avp.value);
             if (!peer_info.product_name.empty()) {
                 throw AvpOccursTooManyTimes("Duplicate Product-Name");
@@ -83,13 +84,13 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
         }
 
         // Supported-Vendor-Id
-        if (avp.code == 265) {
+        if (avp.code == application::base::AvpCodeV::SupportedVendorId) {
             auto value = serial::avp::value_as<message::avp::Unsigned32>(avp.value);
             peer_info.supported_vendor_ids.insert(*value);
         }
 
         // Auth-Application-Id
-        if (avp.code == 258) {
+        if (avp.code == application::base::AvpCodeV::AuthApplicationId) {
             auto value = serial::avp::value_as<message::avp::Unsigned32>(avp.value);
             peer_info.auth_application_ids.insert(*value);
         }
@@ -99,7 +100,7 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
         // The use of this AVP in CER and CEA messages is NOT RECOMMENDED.
         // NO_INBAND_SECURITY = 0
         // TLS = 1
-        if (avp.code == 299) {
+        if (avp.code == application::base::AvpCodeV::InbandSecurityId) {
             auto value = serial::avp::value_as<message::avp::Unsigned32>(avp.value);
             if (*value == 1) {
                 peer_info.inband_security_supported = true;
@@ -110,7 +111,7 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
         }
 
         // Acct-Application-Id
-        if (avp.code == 259) {
+        if (avp.code == application::base::AvpCodeV::AcctApplicationId) {
             auto value = serial::avp::value_as<message::avp::Unsigned32>(avp.value);
             peer_info.acct_application_ids.insert(*value);
         }
@@ -120,7 +121,7 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
         //                                      { Vendor-Id }
         //                                      [ Auth-Application-Id ]
         //                                      [ Acct-Application-Id ]
-        if (avp.code == 260) {
+        if (avp.code == application::base::AvpCodeV::VendorSpecificApplicationId) {
             auto value = serial::avp::value_as<message::avp::Grouped>(avp.value);
 
             message::avp::VendorId vendor_id = 0;
@@ -128,20 +129,20 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
             message::header::ApplicationId acct_application_id = 0;
             for (const auto& a : *value) {
                 // Vendor-Id
-                if (a.code == 266) {
-                    auto value = serial::avp::value_as<message::avp::Unsigned32>(avp.value);
+                if (a.code == application::base::AvpCodeV::VendorId) {
+                    auto value = serial::avp::value_as<message::avp::Unsigned32>(a.value);
                     vendor_id = *value;
                 }
 
                 // Auth-Application-Id
-                if (a.code == 258) {
-                    auto value = serial::avp::value_as<message::avp::Unsigned32>(avp.value);
+                if (a.code == application::base::AvpCodeV::AuthApplicationId) {
+                    auto value = serial::avp::value_as<message::avp::Unsigned32>(a.value);
                     auth_application_id = *value;
                 }
 
                 // Acct-Application-Id
-                if (a.code == 259) {
-                    auto value = serial::avp::value_as<message::avp::Unsigned32>(avp.value);
+                if (a.code == application::base::AvpCodeV::AcctApplicationId) {
+                    auto value = serial::avp::value_as<message::avp::Unsigned32>(a.value);
                     acct_application_id = *value;
                 }
             }
@@ -152,6 +153,10 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
 
             if (auth_application_id == 0 && acct_application_id == 0) {
                 throw MissingAvp("Not found Auth-Application-Id or Acct-Application-Id in Vendor-Specific-Application-Id");
+            }
+
+            if (auth_application_id != 0 && acct_application_id != 0) {
+                throw AvpOccursTooManyTimes("Found Auth-Application-Id and Acct-Application-Id in Vendor-Specific-Application-Id");
             }
 
             if (auth_application_id != 0) {

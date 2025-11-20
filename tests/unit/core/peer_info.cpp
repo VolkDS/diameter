@@ -2,11 +2,14 @@
 
 #include <diameter/core/peer/info.h>
 #include <diameter/message/avp/vendor_id.h>
+#include <diameter/application/base/avp.h>
+#include <diameter/application/base/command.h>
 
 #include <list>
 
 using namespace diameter::core::peer;
 
+namespace da = diameter::application;
 namespace dm = diameter::message;
 namespace dmh = diameter::message::header;
 namespace dma = diameter::message::avp;
@@ -31,26 +34,90 @@ BOOST_AUTO_TEST_CASE(default_constructor)
 
 BOOST_AUTO_TEST_CASE(construct_from_message)
 {
+    // <CER> ::= < Diameter Header: 257, REQ >
+    //           { Origin-Host }
+    //           { Origin-Realm }
+    //        1* { Host-IP-Address }
+    //           { Vendor-Id }
+    //           { Product-Name }
+    //           [ Origin-State-Id ]
+    //         * [ Supported-Vendor-Id ]
+    //         * [ Auth-Application-Id ]
+    //         * [ Inband-Security-Id ]
+    //         * [ Acct-Application-Id ]
+    //         * [ Vendor-Specific-Application-Id ]
+    //           [ Firmware-Revision ]
+    //         * [ AVP ]
     dm::Message m {
         {
             dmh::ProtocolVersion{dmh::ProtocolVersionV::V01},
             dmh::MessageLength{0},
-            dmh::CommandFlags{0x80},
-            dmh::CommandCode{257},
-            dmh::ApplicationId{0},
-            dmh::HopByHopIdentifier{0x6ad1d314},
-            dmh::EndToEndIdentifier{0x77287404}
+            dmh::CommandFlags{dmh::CommandFlag::Request},
+            dmh::CommandCode{da::base::CommandV::CapabilitiesExchange},
+            dmh::ApplicationId{dmh::ApplicationV::Common},
+            dmh::HopByHopIdentifier{1},
+            dmh::EndToEndIdentifier{1}
         },
         std::list<dma::AVP>{
-            dma::AVP{264, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::DiameterIdentity("testhost.epc.mnc000.mcc000.3gppnetwork.org")},
-            dma::AVP{296, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::DiameterIdentity("epc.mnc000.mcc000.3gppnetwork.org")},
-            dma::AVP{257, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Address("127.0.0.1")},
-            dma::AVP{266, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{10415})},
-            dma::AVP{269, dma::Flags{}, std::nullopt, dma::UTF8String("ExampleProduct")},
-            dma::AVP{258, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{4})},
-            dma::AVP{265, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{10415})}
+            dma::AVP{da::base::AvpCodeV::OriginHost, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::DiameterIdentity("testhost.epc.mnc000.mcc000.3gppnetwork.org")},
+            dma::AVP{da::base::AvpCodeV::OriginRealm, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::DiameterIdentity("epc.mnc000.mcc000.3gppnetwork.org")},
+            dma::AVP{da::base::AvpCodeV::HostIPAddress, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Address("127.0.0.1")},
+            dma::AVP{da::base::AvpCodeV::HostIPAddress, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Address("127.0.0.2")},
+            dma::AVP{da::base::AvpCodeV::VendorId, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{1})},
+            dma::AVP{da::base::AvpCodeV::ProductName, dma::Flags{}, std::nullopt, dma::UTF8String("ExampleProduct")},
+            dma::AVP{da::base::AvpCodeV::SupportedVendorId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{2})},
+            dma::AVP{da::base::AvpCodeV::SupportedVendorId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{3})},
+            dma::AVP{da::base::AvpCodeV::SupportedVendorId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{4})},
+            dma::AVP{da::base::AvpCodeV::AuthApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{5})},
+            dma::AVP{da::base::AvpCodeV::AuthApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{6})},
+            dma::AVP{da::base::AvpCodeV::AcctApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{7})},
+            dma::AVP{da::base::AvpCodeV::AcctApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{8})},
+            dma::AVP{da::base::AvpCodeV::VendorSpecificApplicationId, dma::Flags{}, std::nullopt, dma::Grouped(dma::Grouped::value_type{
+                dma::AVP{da::base::AvpCodeV::VendorId, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{9})},
+                dma::AVP{da::base::AvpCodeV::AuthApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{10})},
+            })},
+            dma::AVP{da::base::AvpCodeV::VendorSpecificApplicationId, dma::Flags{}, std::nullopt, dma::Grouped(dma::Grouped::value_type{
+                dma::AVP{da::base::AvpCodeV::VendorId, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{11})},
+                dma::AVP{da::base::AvpCodeV::AcctApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{12})},
+            })}
         }
     };
+
+    auto m_ptr = std::make_shared<dm::Message>(std::move(m));
+    PeerInfo peer_info = make_peer_info(m_ptr);
+
+    BOOST_CHECK_EQUAL(peer_info.origin_host, "testhost.epc.mnc000.mcc000.3gppnetwork.org");
+    BOOST_CHECK_EQUAL(peer_info.origin_realm, "epc.mnc000.mcc000.3gppnetwork.org");
+    BOOST_CHECK_EQUAL(peer_info.vendor_id, 1);
+    BOOST_CHECK_EQUAL(peer_info.product_name, "ExampleProduct");
+
+    {
+        auto expected_data = std::list<uint32_t>{2, 3, 4};
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            peer_info.supported_vendor_ids.begin(),
+            peer_info.supported_vendor_ids.end(),
+            expected_data.begin(),
+            expected_data.end()
+        );
+    }
+    {
+        auto expected_data = std::list<uint32_t>{5, 6};
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            peer_info.auth_application_ids.begin(),
+            peer_info.auth_application_ids.end(),
+            expected_data.begin(),
+            expected_data.end()
+        );
+    }
+    {
+        auto expected_data = std::list<uint32_t>{7, 8};
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            peer_info.acct_application_ids.begin(),
+            peer_info.acct_application_ids.end(),
+            expected_data.begin(),
+            expected_data.end()
+        );
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
