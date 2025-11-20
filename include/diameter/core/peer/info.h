@@ -1,11 +1,16 @@
 #ifndef DIAMETER_CORE_PEER_INFO_H
 #define DIAMETER_CORE_PEER_INFO_H
 
+#include <memory>
 #include <set>
 #include <string>
 
+#include <diameter/application/base/command.h>
+#include <diameter/core/error.h>
 #include <diameter/message/avp/vendor_id.h>
 #include <diameter/message/header/application_id.h>
+#include <diameter/message/message.h>
+#include <diameter/serial/serial.h>
 
 namespace diameter::core::peer {
 
@@ -26,6 +31,8 @@ struct PeerInfo
     application_ids_type acct_application_ids;
     vendor_specific_application_ids_type vendor_specific_application_ids;
 };
+
+PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message);
 
 }
 
