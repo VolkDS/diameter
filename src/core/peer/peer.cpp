@@ -6,7 +6,7 @@ const Peer::FsmTransitionTableType Peer::m_fsm_transition_table {
     {{States::CLOSED, Events::START},      {States::WAIT_CONN_ACK, &Peer::initiator_start_connection}},
     {{States::CLOSED, Events::R_CONN_CER}, {States::ROPEN,         &Peer::responder_accept}},
 
-    {{States::WAIT_CONN_ACK, Events::I_RCV_CONN_ACK},  {States::WAIT_CEA, &Peer::initiator_send_CER}},
+    {{States::WAIT_CONN_ACK, Events::I_RCV_CONN_ACK},  {States::WAIT_CEA, &Peer::initiator_apply}},
     {{States::WAIT_CONN_ACK, Events::I_RCV_CONN_NACK}, {States::CLOSED,   &Peer::cleanup}},
     {{States::WAIT_CONN_ACK, Events::R_CONN_CER},      {States::ELECT,    &Peer::responder_accept}},
     {{States::WAIT_CONN_ACK, Events::TIMEOUT},         {States::CLOSED,   &Peer::error}},
@@ -21,7 +21,7 @@ const Peer::FsmTransitionTableType Peer::m_fsm_transition_table {
     {{States::WAIT_CEA, Events::I_RCV_MESSAGE}, {States::CLOSED,       &Peer::error}},
     {{States::WAIT_CEA, Events::TIMEOUT},       {States::CLOSED,       &Peer::error}},
 
-    {{States::ELECT, Events::I_RCV_CONN_ACK},  {States::WAIT_RETURNS,  &Peer::initiator_send_CER}},
+    {{States::ELECT, Events::I_RCV_CONN_ACK},  {States::WAIT_RETURNS,  &Peer::initiator_apply}},
     {{States::ELECT, Events::I_RCV_CONN_NACK}, {States::ROPEN,         &Peer::responder_send_CEA}},
     {{States::ELECT, Events::R_PEER_DISC},     {States::WAIT_CONN_ACK, &Peer::responder_disconnect}},
     {{States::ELECT, Events::R_CONN_CER},      {States::ELECT,         &Peer::responder_reject}},

@@ -20,13 +20,17 @@ class Peer
 {
 public:
     using SelfPtr = std::shared_ptr<Peer>;
+    using SelfWPtr = std::weak_ptr<Peer>;
     using ConnectionPtr = std::shared_ptr<io::Connection>;
     using ConnectorPtr = std::shared_ptr<io::Connector>;
     using MessagePtr = std::shared_ptr<message::Message>;
 
     using FsmUserDataType = std::variant<ConnectorPtr, ConnectionPtr, MessagePtr, std::nullptr_t>;
 
-    using OnRecvMessageCb = std::function<void(message::Message&&)>;
+    using OnRecvMessageCb = std::function<void(MessagePtr&&)>;
+    //The stable states that a state machine may be in are Closed, I-Open, and R-Open
+    using OnStableStateCb = std::function<void()>;
+    using OnRecvCommonMessageCb = std::function<MessagePtr(MessagePtr&&)>;
 
     enum class States : uint32_t
     {
@@ -49,7 +53,6 @@ public:
         TIMEOUT,
         I_RCV_CEA,
         I_PEER_DISC,
-        I_RCV_NON_CEA,
         R_PEER_DISC,
         WIN_ELECTION,
         SEND_MESSAGE,
@@ -71,9 +74,6 @@ public:
 
     using IdentityType = std::string;
 
-    //The stable states that a state machine may be in are Closed, I-Open, and R-Open
-    using OnStableStateCb = std::function<void()>;
-
     using on_send_message_error_t = std::function<void(message::Message&&)>;
 
     template<typename... Args>
@@ -89,7 +89,7 @@ public:
 
     void start(const ConnectorPtr& connector)
     {
-        m_fsm.process_event(Events::START, connector);
+        m_fsm.process_event(Events::START,  std::move(connector));
     }
 
     void stop()
@@ -117,32 +117,23 @@ public:
         }
     }
 
-    void set_on_recv_message_cb()
+    void set_on_recv_message_cb(OnRecvMessageCb&& handler)
     {
-
+        std::unique_lock lock(m_callback_mutex);
+        m_on_recv_message_cb = std::move(handler);
     }
 
     void set_on_open_state_cb(OnStableStateCb&& handler)
     {
+        std::unique_lock lock(m_callback_mutex);
         m_on_open_state_cb = std::move(handler);
     }
 
     void set_on_closed_state_cb(OnStableStateCb&& handler)
     {
+        std::unique_lock lock(m_callback_mutex);
         m_on_closed_state_cb = std::move(handler);
     }
-
-    // void responder_recv_message();
-    // void responder_recv_DWR();
-    // void responder_recv_DWA();
-    // void responder_recv_DPR();
-    // void responder_recv_DPA();
-
-    // void initiator_recv_message();
-    // void initiator_recv_DWR();
-    // void initiator_recv_DWA();
-    // void initiator_recv_DPR();
-    // void initiator_recv_DPA();
 
 private:
     Peer(const IdentityType& local_host, const IdentityType& local_realm,
@@ -179,6 +170,7 @@ private:
     void responder_accept(FsmUserDataType&& ud)
     {
         m_responder = std::get<ConnectionPtr>(std::move(ud));
+        auto CER_message = std::make_shared<message::Message>(); //TODO Get CER from IncomingController
 
         auto self = shared_from_this();
         m_responder->set_on_disconnect_cb([self](const boost::system::error_code& error) {
@@ -215,32 +207,27 @@ private:
                     }
                 }
             }
-
             self->m_fsm.process_event(Events::R_RCV_MESSAGE, std::move(message));
         });
 
-        // TODO: callback for generate CEA message
-        auto CEA_message = std::make_shared<message::Message>();
-        m_responder->send_message(CEA_message);
+        process_CER(CER_message);
     }
 
-    // The CER associated with the R_Conn_CER is processed.
-    void process_CER(const MessagePtr& CER_message)
+    // The incoming connection associated with the R_Conn_CER is disconnected.
+    void responder_reject(FsmUserDataType&& ud)
     {
-        // TODO: Make some checks for CER and after send CEA
-
-        // TODO: callback for generate CEA message
-        auto CEA_message = std::make_shared<message::Message>();
-        m_responder->send_message(CEA_message);
+        auto responder = std::get<ConnectionPtr>(std::move(ud));
+        responder->stop();
     }
 
     // A CER message is sent to the peer.
-    void initiator_send_CER(FsmUserDataType&& ud)
+    // Events::I_RCV_CONN_ACK
+    void initiator_apply(FsmUserDataType&& ud)
     {
         m_initiator = std::get<ConnectionPtr>(std::move(ud));
 
         auto self = shared_from_this();
-        m_initiator->set_on_disconnect_cb([self](const boost::system::error_code& error) {
+        m_initiator->set_on_disconnect_cb([self](const boost::system::error_code& /*error*/) {
             self->m_fsm.process_event(Events::I_PEER_DISC);
         });
         m_initiator->set_on_recv_message_cb([self](MessagePtr&& message) {
@@ -277,21 +264,34 @@ private:
                     }
                 }
             }
-
             self->m_fsm.process_event(Events::I_RCV_MESSAGE, std::move(message));
         });
         m_initiator->run();
 
+        initiator_send_CER(nullptr);
+    }
+
+    void initiator_send_CER(FsmUserDataType&& ud)
+    {
         // TODO: callback for generate CER message
         auto CER_message = std::make_shared<message::Message>();
         m_initiator->send_message(CER_message);
+
+        if (m_fsm.state() == States::ELECT) {
+            elect(m_local_host, m_remote_host);
+        }
     }
 
     // A CEA message is sent to the peer.
-    void responder_send_CEA(FsmUserDataType&& ud);
+    void responder_send_CEA(FsmUserDataType&& ud)
+    {
+        // TODO: callback for generate CEA message
+        auto CEA_message = std::make_shared<message::Message>();
+        m_responder->send_message(CEA_message);
+    }
 
     // If necessary, the connection is shut down, and any local resources are freed.
-    // Events::I_RCV_CONN_NACK
+    // Only when States::WAIT_CONN_ACK recv Events::I_RCV_CONN_NACK
     void cleanup(FsmUserDataType&& /*ud*/)
     {
         if (m_connector) {
@@ -314,11 +314,28 @@ private:
         }
     }
 
-    // A received CEA is processed.
-    void process_CEA(FsmUserDataType&& ud);
-
     // An election occurs (see Section 5.6.4 for more information).
-    void elect(FsmUserDataType&& ud);
+    //
+    // The responder compares the Origin-Host received in the CER
+    // with its own Origin-Host as two streams of octets.
+    // If the local Origin-Host lexicographically succeeds the received Origin-Host,
+    // a Win-Election event is issued locally.
+    void elect(const std::string& local_origin_host, const std::string& received_origin_host)
+    {
+        //true if the Received Origin Host range is lexicographically less than the Local Origin Host, otherwise false.
+        bool is_win = std::lexicographical_compare(
+            received_origin_host.begin(), received_origin_host.end(),
+            local_origin_host.begin(), local_origin_host.end(),
+            [](unsigned char a, unsigned char b) {
+                return std::tolower(a) < std::tolower(b);
+            }
+        );
+
+        if (is_win) {
+            // TODO: Important! This call should be after the end off prev action
+            m_fsm.process_event(Events::WIN_ELECTION);
+        }
+    }
 
     // The transport layer connection is disconnected, and local resources are freed.
     void initiator_disconnect(FsmUserDataType&& ud)
@@ -327,6 +344,9 @@ private:
             m_initiator->stop();
             m_initiator.reset();
         }
+        if (m_fsm.state() == States::WAIT_RETURNS) {
+            responder_send_CEA(nullptr);
+        }
     }
     void responder_disconnect(FsmUserDataType&& ud)
     {
@@ -334,13 +354,6 @@ private:
             m_responder->stop();
             m_responder.reset();
         }
-    }
-
-    // The incoming connection associated with the R_Conn_CER is disconnected.
-    void responder_reject(FsmUserDataType&& ud)
-    {
-        auto connect = std::get<ConnectionPtr>(std::move(ud));
-        connect->stop();
     }
 
     // A message is to be sent.
@@ -359,33 +372,72 @@ private:
     void process_message(FsmUserDataType&& ud)
     {
         auto message = std::get<MessagePtr>(std::move(ud));
+
+        std::shared_lock lock(m_callback_mutex);
+        if (m_on_recv_message_cb) {
+            m_on_recv_message_cb(std::move(message));
+        }
+    }
+
+    // The CER associated with the R_Conn_CER is processed.
+    void process_CER(FsmUserDataType&& ud)
+    {
+        auto CER_message = std::get<MessagePtr>(std::move(ud));
+
+        // TODO: Make some checks for CER and after send CEA
+        PeerInfo peer_info = make_peer_info(CER_message);
+
+        if (m_fsm.state() == States::CLOSED) {
+            responder_send_CEA(nullptr);
+        }
+        else if (m_fsm.state() == States::WAIT_CEA) {
+            elect(m_local_host, m_remote_host);
+        }
+    }
+
+    // A received CEA is processed.
+    void process_CEA(FsmUserDataType&& ud)
+    {
+        auto CEA_message = std::get<MessagePtr>(std::move(ud));
+
+        PeerInfo peer_info = make_peer_info(CEA_message);
     }
 
     // The DWR/DWA message is serviced.
     void process_DWR(FsmUserDataType&& ud)
     {
-        // <DWR>  ::= < Diameter Header: 280, REQ >
-        //            { Origin-Host }
-        //            { Origin-Realm }
-        //            [ Origin-State-Id ]
-        //          * [ AVP ]
         auto DWR_message = std::get<MessagePtr>(std::move(ud));
+
+        std::shared_lock lock(m_callback_mutex);
+        MessagePtr DWA_message;
+        if (m_on_recv_DWR_cb) {
+            DWA_message = m_on_recv_DWR_cb(std::move(DWR_message));
+        }
+
+        if (m_fsm.state() == States::IOPEN) {
+            initiator_send_DWA(DWA_message);
+        }
+        // States::ROPEN
+        else {
+            responder_send_DWA(DWA_message);
+        }
     }
+
     void process_DWA(FsmUserDataType&& ud)
     {
-        // <DWA>  ::= < Diameter Header: 280 >
-        //            { Result-Code }
-        //            { Origin-Host }
-        //            { Origin-Realm }
-        //            [ Error-Message ]
-        //            [ Failed-AVP ]
-        //            [ Origin-State-Id ]
-        //          * [ AVP ]
         auto DWA_message = std::get<MessagePtr>(std::move(ud));
+
+        std::shared_lock lock(m_callback_mutex);
+        if (m_on_recv_DWA_cb) {
+            m_on_recv_DWA_cb(std::move(DWA_message));
+        }
     }
 
     // A DWR/DWA message is sent.
-    void initiator_send_DWR(FsmUserDataType&& ud);
+    void initiator_send_DWR(FsmUserDataType&& ud)
+    {
+    }
+
     void initiator_send_DWA(FsmUserDataType&& ud);
     void responder_send_DWR(FsmUserDataType&& ud);
     void responder_send_DWA(FsmUserDataType&& ud);
@@ -409,9 +461,21 @@ private:
     ConnectionPtr m_initiator;
     ConnectionPtr m_responder;
 
+    std::shared_mutex m_callback_mutex;
     OnStableStateCb m_on_open_state_cb;
     OnStableStateCb m_on_closed_state_cb;
     OnRecvMessageCb m_on_recv_message_cb;
+
+    //m_on_generate_CER_cb;
+    //m_on_generate_DWR_cb;
+    //m_on_generate_DPR_cb;
+
+    OnRecvCommonMessageCb m_on_recv_CER_cb;
+    OnRecvCommonMessageCb m_on_recv_CEA_cb;
+    OnRecvCommonMessageCb m_on_recv_DWR_cb;
+    OnRecvCommonMessageCb m_on_recv_DWA_cb;
+    OnRecvCommonMessageCb m_on_recv_DPR_cb;
+    OnRecvCommonMessageCb m_on_recv_DPA_cb;
 };
 
 } // namespace diameter::core::peer
