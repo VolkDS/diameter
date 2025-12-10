@@ -15,8 +15,8 @@
     <EndToEndId>2271560481</EndToEndId>
 </Header>
 <AVPs>
-	<AVP code="404" mandatory="true" protected="false" type="UTF8String">test</AVP>
-	<AVP code="404" mandatory="true" protected="false" vendor_id="10415" type="Grouped">
+    <AVP code="404" mandatory="true" protected="false" type="UTF8String">test</AVP>
+    <AVP code="404" mandatory="true" protected="false" vendor_id="10415" type="Grouped">
         <AVP code="500" mandatory="true" protected="false" vendor_id="10415" type="UTF8String">test</AVP>
         <AVP code="222" mandatory="true" protected="false" vendor_id="10415" type="Unsigned32">10415</AVP>
     </AVP>
