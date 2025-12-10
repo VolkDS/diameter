@@ -79,6 +79,7 @@ private:
         : m_socket(ioc),
           m_resolver(ioc),
           m_timer(ioc),
+          m_dst_address(dst_address),
           m_src_address(src_address),
           m_running(false),
           m_stopped(false)
@@ -165,6 +166,7 @@ private:
             return;
         }
 
+        async_connect(iterator);
     }
 
     void async_connect(ResolverIterType iterator)
