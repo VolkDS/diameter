@@ -2,8 +2,8 @@
 #define DIAMETER_CORE_MANAGER_MANAGER_H
 
 #include <memory>
-#include <mutex>
 #include <set>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -12,6 +12,7 @@
 
 #include <diameter/core/config/config.h>
 #include <diameter/core/controller/incoming_controller.h>
+#include <diameter/core/error.h>
 #include <diameter/core/io/acceptor.h>
 #include <diameter/core/io/connection.h>
 #include <diameter/core/io/connector.h>
@@ -38,6 +39,9 @@ public:
         : m_ioc(ioc),
           m_incoming_controller(ioc)
     {
+        m_incoming_controller.set_on_remote_connection_CER_cb([this](auto&&... args) {
+            this->on_remote_connection_CER_handler(std::forward<decltype(args)>(args)...);
+        });
     }
 
     Manager(Manager const&) = delete;
@@ -47,7 +51,7 @@ public:
 
     void configure(config::Config&& conf)
     {
-        auto lk = std::lock_guard(m_mutex);
+        std::unique_lock lock(m_mutex);
         m_config = std::move(conf);
 
         for (auto it = m_acceptors.begin(); it != m_acceptors.end();) {
@@ -148,15 +152,8 @@ private:
         }
 
         auto acceptor = io::Acceptor::create(m_ioc, acceptor_config.local_addr);
-        acceptor->set_on_accept_cb([this](const boost::system::error_code& error,
-                                       io::Acceptor::SocketType&& socket) {
-            if (error) {
-                return;
-            }
-
-            auto connection = io::Connection::create(std::move(socket));
-            // TODO: pass parameter from acceptor config
-            m_incoming_controller.add_new_connection(connection, std::chrono::seconds {5});
+        acceptor->set_on_accept_cb([this, acceptor_name = name](auto&&... args) {
+            this->on_accept_handler(acceptor_name, std::forward<decltype(args)>(args)...);
         });
         acceptor->run();
         m_acceptors.insert({name, acceptor});
@@ -196,6 +193,66 @@ private:
     }
 
 private:
+    void on_accept_handler(const std::string& acceptor_name, const boost::system::error_code& error,
+        io::Acceptor::SocketType&& socket)
+    {
+        if (error) {
+            return;
+        }
+        auto connection = io::Connection::create(std::move(socket));
+
+        std::shared_lock lock(m_mutex);
+        auto it = m_config.acceptors.find(acceptor_name);
+        if (it == m_config.acceptors.end()) {
+            // Not found acceptor
+            connection->stop();
+            return;
+        }
+        auto& acceptor_config = it->second;
+
+        m_incoming_controller.add_new_connection(std::move(connection), acceptor_name, acceptor_config.capability_timeout);
+    }
+
+    void on_remote_connection_CER_handler(ConnectionPtr&& connection, const std::string& acceptor_name,
+        std::shared_ptr<message::Message>&& CER_message)
+    {
+        std::shared_lock lock(m_mutex);
+        auto it = m_config.acceptors.find(acceptor_name);
+        if (it == m_config.acceptors.end()) {
+            //TODO: send CEA: UNKNOWN_PEER
+            connection->stop();
+            return;
+        }
+        auto& acceptor_config = it->second;
+        auto& local_peer_conf = m_config.local_peers.at(acceptor_config.local_peer_name);
+
+        peer::PeerInfo remote_peer_info;
+        try {
+            remote_peer_info = peer::make_peer_info(CER_message);
+        }
+        catch (const core::Exception& ex) {
+            //TODO: send CEA with Error AVP
+            connection->stop();
+            return;
+        }
+
+        auto full_name = peer::detail::make_full_peer_identity(local_peer_conf.info.origin_host, local_peer_conf.info.origin_realm,
+            remote_peer_info.origin_host, remote_peer_info.origin_realm);
+
+        for (auto it = m_peers.begin(); it != m_peers.end();) {
+            auto peer_name = it->first;
+            auto peer = it->second;
+
+            if (peer->full_id() == full_name) {
+                auto incoming_data = peer::Peer::IncomingData {std::move(connection), std::move(CER_message), std::move(remote_peer_info)};
+                peer->responder_connection_CER(std::move(incoming_data));
+                return;
+            }
+        }
+        //TODO: send CEA: UNKNOWN_PEER
+    }
+
+private:
     boost::asio::io_context& m_ioc;
 
     config::Config m_config;
@@ -205,7 +262,7 @@ private:
 
     controller::IncomingController m_incoming_controller;
 
-    std::mutex m_mutex;
+    std::shared_mutex m_mutex;
 
     OnRecvMessageCb m_on_recv_message_callback;
     OnPeerStateCb m_on_peer_open_state_callback;

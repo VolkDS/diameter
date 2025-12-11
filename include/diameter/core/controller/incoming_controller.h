@@ -11,6 +11,7 @@
 #include <boost/asio/steady_timer.hpp>
 
 #include <diameter/core/io/connection.h>
+#include <diameter/core/peer/info.h>
 #include <diameter/application/base/command.h>
 #include <diameter/message/message.h>
 
@@ -24,11 +25,14 @@ public:
     using MessagePtr = std::shared_ptr<message::Message>;
     using TimerPtr = std::shared_ptr<boost::asio::steady_timer>;
 
+    using OnRemoteConnectionCerCb = std::function<void(ConnectionPtr&&, const std::string&, MessagePtr&&)>;
+
 private:
     struct WaitingData
     {
         ConnectionPtr connect;
         TimerPtr timer;
+        std::string acceptor_name;
     };
 
     using WaitingDataMap = std::unordered_map<ConnectionId, WaitingData>;
@@ -44,10 +48,11 @@ public:
     IncomingController(IncomingController&&) = delete;
     IncomingController& operator= (IncomingController&&) = delete;
 
-    void add_new_connection(const ConnectionPtr& connect, const std::chrono::steady_clock::duration& timeout)
+    void add_new_connection(ConnectionPtr&& connect, const std::string& acceptor_name,
+        const std::chrono::steady_clock::duration& timeout)
     {
         auto timer = std::make_shared<boost::asio::steady_timer>(m_ioc);
-        auto data = WaitingData{connect, timer};
+        auto data = WaitingData{std::move(connect), std::move(timer), acceptor_name};
 
         std::lock_guard lock(m_mutex);
         auto conn_id = generate_connection_id();
@@ -76,6 +81,12 @@ public:
             data.connect->stop();
         }
         m_waiting_connections.clear();
+    }
+
+    void set_on_remote_connection_CER_cb(OnRemoteConnectionCerCb handler)
+    {
+        std::lock_guard lock(m_mutex);
+        m_on_remote_connection_CER_cb = std::move(handler);
     }
 
 private:
@@ -109,6 +120,7 @@ private:
     void on_message(ConnectionId conn_id, MessagePtr&& message)
     {
         ConnectionPtr connect;
+        std::string acceptor_name;
         {
             std::lock_guard lock(m_mutex);
             auto it = m_waiting_connections.find(conn_id);
@@ -117,18 +129,19 @@ private:
             }
             it->second.timer->cancel();
             connect = it->second.connect;
+            acceptor_name = it->second.acceptor_name;
         }           
 
-        auto msg = std::move(message);
         // 5.6.1. Incoming Connections
         // The logic that handles incoming connections SHOULD close and discard
         // the connection if any message other than a CER arrives
-        if (!is_CER_message(msg)) {
+        if (!is_CER_message(message)) {
             connect->stop();
             return;
         }
 
-        // TODO: call on R_Conn_CER
+        std::lock_guard lock(m_mutex);
+        m_on_remote_connection_CER_cb(std::move(connect), acceptor_name, std::move(message));
     }
 
     bool is_CER_message(const MessagePtr& message) const noexcept
@@ -154,6 +167,7 @@ private:
 
     mutable std::mutex m_mutex;
     std::unordered_map<ConnectionId, WaitingData> m_waiting_connections;
+    OnRemoteConnectionCerCb m_on_remote_connection_CER_cb;
 };
 
 }

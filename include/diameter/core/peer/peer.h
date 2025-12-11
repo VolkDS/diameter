@@ -15,6 +15,16 @@
 
 namespace diameter::core::peer {
 
+namespace detail {
+
+inline std::string make_full_peer_identity(const std::string& local_host, const std::string& local_realm,
+    const std::string& remote_host, const std::string& remote_realm)
+{
+    return local_host + "_" + local_realm + "_" + remote_host + "_" + remote_realm;
+}
+
+} // namespace detail
+
 class Peer
     : public std::enable_shared_from_this<Peer>
 {
@@ -25,7 +35,13 @@ public:
     using ConnectorPtr = std::shared_ptr<io::Connector>;
     using MessagePtr = std::shared_ptr<message::Message>;
 
-    using FsmUserDataType = std::variant<ConnectorPtr, ConnectionPtr, MessagePtr, std::nullptr_t>;
+    struct IncomingData {
+        ConnectionPtr connection;
+        MessagePtr CER_message;
+        PeerInfo remote_peer_info;
+    };
+
+    using FsmUserDataType = std::variant<ConnectorPtr, ConnectionPtr, IncomingData, MessagePtr, std::nullptr_t>;
 
     using OnRecvMessageCb = std::function<void(MessagePtr&&)>;
     //The stable states that a state machine may be in are Closed, I-Open, and R-Open
@@ -97,9 +113,14 @@ public:
         m_fsm.process_event(Events::STOP);
     }
 
-    void responder_connection_CER(const ConnectionPtr& connect)
+    void responder_connection_CER(IncomingData&& incoming_data)
     {
-        m_fsm.process_event(Events::R_CONN_CER, std::move(connect));
+        m_fsm.process_event(Events::R_CONN_CER, std::move(incoming_data));
+    }
+
+    IdentityType full_id() const
+    {
+        return m_full_id;
     }
 
     // void initiator_recv_connection_ack();
@@ -144,6 +165,12 @@ private:
           m_remote_realm(remote_realm),
           m_fsm(this, States::CLOSED, &m_fsm_transition_table)
     {
+        m_full_id = detail::make_full_peer_identity(
+            m_local_host,
+            m_local_realm,
+            m_remote_host,
+            m_remote_realm
+        );
     }
 
     static const FsmTransitionTableType m_fsm_transition_table;
@@ -169,8 +196,10 @@ private:
     // connection.
     void responder_accept(FsmUserDataType&& ud)
     {
-        m_responder = std::get<ConnectionPtr>(std::move(ud));
-        auto CER_message = std::make_shared<message::Message>(); //TODO Get CER from IncomingController
+        auto incoming_data = std::get<IncomingData>(std::move(ud));
+        m_responder = std::move(incoming_data.connection);
+        auto CER_message = std::move(incoming_data.CER_message);
+        auto remote_peer_info = std::move(incoming_data.remote_peer_info);
 
         auto self = shared_from_this();
         m_responder->set_on_disconnect_cb([self](const boost::system::error_code& error) {
@@ -210,14 +239,14 @@ private:
             self->m_fsm.process_event(Events::R_RCV_MESSAGE, std::move(message));
         });
 
-        process_CER(CER_message);
+        process_CER(CER_message, remote_peer_info);
     }
 
     // The incoming connection associated with the R_Conn_CER is disconnected.
     void responder_reject(FsmUserDataType&& ud)
     {
-        auto responder = std::get<ConnectionPtr>(std::move(ud));
-        responder->stop();
+        auto incoming_data = std::get<IncomingData>(std::move(ud));
+        incoming_data.connection->stop();
     }
 
     // A CER message is sent to the peer.
@@ -271,7 +300,7 @@ private:
         initiator_send_CER(nullptr);
     }
 
-    void initiator_send_CER(FsmUserDataType&& ud)
+    void initiator_send_CER(FsmUserDataType&& /*ud*/)
     {
         // TODO: callback for generate CER message
         auto CER_message = std::make_shared<message::Message>();
@@ -283,7 +312,7 @@ private:
     }
 
     // A CEA message is sent to the peer.
-    void responder_send_CEA(FsmUserDataType&& ud)
+    void responder_send_CEA(FsmUserDataType&& /*ud*/)
     {
         // TODO: callback for generate CEA message
         auto CEA_message = std::make_shared<message::Message>();
@@ -338,7 +367,7 @@ private:
     }
 
     // The transport layer connection is disconnected, and local resources are freed.
-    void initiator_disconnect(FsmUserDataType&& ud)
+    void initiator_disconnect(FsmUserDataType&& /*ud*/)
     {
         if (m_initiator) {
             m_initiator->stop();
@@ -348,7 +377,7 @@ private:
             responder_send_CEA(nullptr);
         }
     }
-    void responder_disconnect(FsmUserDataType&& ud)
+    void responder_disconnect(FsmUserDataType&& /*ud*/)
     {
         if (m_responder) {
             m_responder->stop();
@@ -380,12 +409,9 @@ private:
     }
 
     // The CER associated with the R_Conn_CER is processed.
-    void process_CER(FsmUserDataType&& ud)
+    void process_CER(const MessagePtr& CER_message, const PeerInfo& peer_info)
     {
-        auto CER_message = std::get<MessagePtr>(std::move(ud));
-
         // TODO: Make some checks for CER and after send CEA
-        PeerInfo peer_info = make_peer_info(CER_message);
 
         if (m_fsm.state() == States::CLOSED) {
             responder_send_CEA(nullptr);
@@ -452,6 +478,7 @@ private:
     IdentityType m_local_realm;
     IdentityType m_remote_host;
     IdentityType m_remote_realm;
+    IdentityType m_full_id;
 
     FsmType m_fsm;
 

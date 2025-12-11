@@ -90,7 +90,7 @@ struct AcceptorConfig
     std::string name;
 
     // Local side
-    LocalPeerConfig local_peer_name;
+    std::string local_peer_name;
     Addr local_addr;
 
     // Security
