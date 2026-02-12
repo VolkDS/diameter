@@ -52,8 +52,7 @@ public:
 
     template<typename ... Args,
              typename = std::enable_if_t<
-             !std::disjunction_v<is_basic_value<std::decay_t<Args>>...>
-             >>
+             !std::disjunction_v<is_basic_value<std::decay_t<Args>>...>>>
     BasicValue(Args&&... args)
         : m_value(std::forward<decltype(args)>(args)...)
     {

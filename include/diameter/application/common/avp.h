@@ -1,11 +1,11 @@
-#ifndef DIAMETER_APPLICATION_BASE_AVP_H
-#define DIAMETER_APPLICATION_BASE_AVP_H
+#ifndef DIAMETER_APPLICATION_COMMON_AVP_H
+#define DIAMETER_APPLICATION_COMMON_AVP_H
 
 #include <diameter/message/avp/code.h>
 
-namespace diameter::application::base {
+namespace diameter::application::common {
 
-// 4.5. Diameter Base Protocol AVPs
+// 4.5. Diameter Common Protocol AVPs
 struct AvpCodeV
 {
     enum Value : message::avp::Code

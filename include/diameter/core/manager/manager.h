@@ -10,6 +10,8 @@
 
 #include <boost/asio/io_context.hpp>
 
+#include <diameter/application/application.h>
+#include <diameter/application/common/common.h>
 #include <diameter/core/config/config.h>
 #include <diameter/core/controller/incoming_controller.h>
 #include <diameter/core/error.h>
@@ -17,6 +19,8 @@
 #include <diameter/core/io/connection.h>
 #include <diameter/core/io/connector.h>
 #include <diameter/core/peer/peer.h>
+#include <diameter/log/log.h>
+#include <diameter/message/message.h>
 
 namespace diameter::core::manager {
 
@@ -146,6 +150,7 @@ public:
 private:
     void create_acceptor(const std::string& name, const config::AcceptorConfig& acceptor_config)
     {
+        DIAMETER_LOG_DEBUG("Create acceptor ["<< name <<"]");
         // TODO SCTP type
         if (acceptor_config.local_addr.type != config::AddrType::TCP) {
             throw std::runtime_error("Unsupported address type");
@@ -162,21 +167,25 @@ private:
     void create_peer(const std::string& name, const config::LocalPeerConfig& local_peer_config,
         const config::PeerConfig& peer_config)
     {
-        auto peer = peer::Peer::create(local_peer_config.info.origin_host, local_peer_config.info.origin_realm,
+        auto peer = peer::Peer::create(name, local_peer_config.info.origin_host, local_peer_config.info.origin_realm,
             peer_config.remote_host, peer_config.remote_realm);
         m_peers.insert({name, peer});
 
         peer::Peer::SelfWPtr wpeer(peer);
         peer->set_on_open_state_cb([wpeer](){
-
+            // TODO: Run DWR timer
         });
 
         peer->set_on_closed_state_cb([wpeer](){
-            // TODO: Run timer
+            // TODO: Run reconnect timer
         });
 
         peer->set_on_recv_message_cb([wpeer](peer::Peer::MessagePtr&& message){
 
+        });
+
+        peer->set_on_generate_CEA_cb([this](auto&&... args){
+            return on_generate_CEA_handler(std::forward<decltype(args)>(args)...);
         });
 
         // peer->set_on_generate_CER_cb([](){
@@ -199,6 +208,19 @@ private:
         if (error) {
             return;
         }
+
+        boost::system::error_code ignore_error;
+        std::string src_host = socket.local_endpoint(ignore_error).address().to_string();
+        uint16_t src_port = socket.local_endpoint(ignore_error).port();
+        std::string dst_host = socket.remote_endpoint(ignore_error).address().to_string();
+        uint16_t dst_port = socket.remote_endpoint(ignore_error).port();
+
+        DIAMETER_LOG_DEBUG("Incomming connect "
+            << src_host << ":" << src_port
+            << " <- "
+            << dst_host << ":" << dst_port
+        );
+
         auto connection = io::Connection::create(std::move(socket));
 
         std::shared_lock lock(m_mutex);
@@ -219,7 +241,7 @@ private:
         std::shared_lock lock(m_mutex);
         auto it = m_config.acceptors.find(acceptor_name);
         if (it == m_config.acceptors.end()) {
-            //TODO: send CEA: UNKNOWN_PEER
+            // Stop connection without CEA because local peer unknown for answer
             connection->stop();
             return;
         }
@@ -249,7 +271,44 @@ private:
                 return;
             }
         }
+        DIAMETER_LOG_ERROR("Unknown peer [" << full_name << "]");
         //TODO: send CEA: UNKNOWN_PEER
+    }
+
+    // <CEA> ::= < Diameter Header: 257 >
+    //           { Result-Code }
+    //           { Origin-Host }
+    //           { Origin-Realm }
+    //        1* { Host-IP-Address }
+    //           { Vendor-Id }
+    //           { Product-Name }
+    //           [ Origin-State-Id ]
+    //           [ Error-Message ]
+    //           [ Failed-AVP ]
+    //         * [ Supported-Vendor-Id ]
+    //         * [ Auth-Application-Id ]
+    //         * [ Inband-Security-Id ]
+    //         * [ Acct-Application-Id ]
+    //         * [ Vendor-Specific-Application-Id ]
+    //           [ Firmware-Revision ]
+    //         * [ AVP ]
+    peer::Peer::MessagePtr on_generate_CEA_handler(const peer::Peer::MessagePtr& CER_message, const peer::PeerInfo& remote_peer_info)
+    {
+        auto builder = application::common::CapabilitiesExchangeBuilder();
+        auto CEA_message = builder
+            .set_hop_by_hop(CER_message->header.hop_by_hop)
+            .set_end_to_end(CER_message->header.end_to_end)
+            .add_result_code(application::common::ResultCodeV::SUCCESS)
+            .add_origin_host("volkov.mnc000.mcc250.3gppnetwork.org")
+            .add_origin_realm("epc.mnc000.mcc250.3gppnetwork.org")
+            .add_host_ip_address("192.168.13.71")
+            .add_vendor_id(1000)
+            .add_product_name("TEST")
+            .add_supported_vendor_id(10415)
+            .add_auth_application_id(16777238)
+            .add_inband_security_id(0)
+            .build();
+        return CEA_message;
     }
 
 private:

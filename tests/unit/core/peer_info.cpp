@@ -2,8 +2,7 @@
 
 #include <diameter/core/peer/info.h>
 #include <diameter/message/avp/vendor_id.h>
-#include <diameter/application/base/avp.h>
-#include <diameter/application/base/command.h>
+#include <diameter/application/common/common.h>
 
 #include <list>
 
@@ -53,32 +52,32 @@ BOOST_AUTO_TEST_CASE(construct_from_message)
             dmh::ProtocolVersion{dmh::ProtocolVersionV::V01},
             dmh::MessageLength{0},
             dmh::CommandFlags{dmh::CommandFlag::Request},
-            dmh::CommandCode{da::base::CommandV::CapabilitiesExchange},
+            dmh::CommandCode{da::common::CommandV::CapabilitiesExchange},
             dmh::ApplicationId{dmh::ApplicationV::Common},
             dmh::HopByHopIdentifier{1},
             dmh::EndToEndIdentifier{1}
         },
         std::list<dma::AVP>{
-            dma::AVP{da::base::AvpCodeV::OriginHost, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::DiameterIdentity("testhost.epc.mnc000.mcc000.3gppnetwork.org")},
-            dma::AVP{da::base::AvpCodeV::OriginRealm, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::DiameterIdentity("epc.mnc000.mcc000.3gppnetwork.org")},
-            dma::AVP{da::base::AvpCodeV::HostIPAddress, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Address("127.0.0.1")},
-            dma::AVP{da::base::AvpCodeV::HostIPAddress, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Address("127.0.0.2")},
-            dma::AVP{da::base::AvpCodeV::VendorId, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{1})},
-            dma::AVP{da::base::AvpCodeV::ProductName, dma::Flags{}, std::nullopt, dma::UTF8String("ExampleProduct")},
-            dma::AVP{da::base::AvpCodeV::SupportedVendorId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{2})},
-            dma::AVP{da::base::AvpCodeV::SupportedVendorId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{3})},
-            dma::AVP{da::base::AvpCodeV::SupportedVendorId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{4})},
-            dma::AVP{da::base::AvpCodeV::AuthApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{5})},
-            dma::AVP{da::base::AvpCodeV::AuthApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{6})},
-            dma::AVP{da::base::AvpCodeV::AcctApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{7})},
-            dma::AVP{da::base::AvpCodeV::AcctApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{8})},
-            dma::AVP{da::base::AvpCodeV::VendorSpecificApplicationId, dma::Flags{}, std::nullopt, dma::Grouped(dma::Grouped::value_type{
-                dma::AVP{da::base::AvpCodeV::VendorId, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{9})},
-                dma::AVP{da::base::AvpCodeV::AuthApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{10})},
+            dma::AVP{da::common::AvpCodeV::OriginHost, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::DiameterIdentity("testhost.epc.mnc000.mcc000.3gppnetwork.org")},
+            dma::AVP{da::common::AvpCodeV::OriginRealm, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::DiameterIdentity("epc.mnc000.mcc000.3gppnetwork.org")},
+            dma::AVP{da::common::AvpCodeV::HostIPAddress, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Address("127.0.0.1")},
+            dma::AVP{da::common::AvpCodeV::HostIPAddress, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Address("127.0.0.2")},
+            dma::AVP{da::common::AvpCodeV::VendorId, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{1})},
+            dma::AVP{da::common::AvpCodeV::ProductName, dma::Flags{}, std::nullopt, dma::UTF8String("ExampleProduct")},
+            dma::AVP{da::common::AvpCodeV::SupportedVendorId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{2})},
+            dma::AVP{da::common::AvpCodeV::SupportedVendorId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{3})},
+            dma::AVP{da::common::AvpCodeV::SupportedVendorId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{4})},
+            dma::AVP{da::common::AvpCodeV::AuthApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{5})},
+            dma::AVP{da::common::AvpCodeV::AuthApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{6})},
+            dma::AVP{da::common::AvpCodeV::AcctApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{7})},
+            dma::AVP{da::common::AvpCodeV::AcctApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{8})},
+            dma::AVP{da::common::AvpCodeV::VendorSpecificApplicationId, dma::Flags{}, std::nullopt, dma::Grouped(dma::Grouped::value_type{
+                dma::AVP{da::common::AvpCodeV::VendorId, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{9})},
+                dma::AVP{da::common::AvpCodeV::AuthApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{10})},
             })},
-            dma::AVP{da::base::AvpCodeV::VendorSpecificApplicationId, dma::Flags{}, std::nullopt, dma::Grouped(dma::Grouped::value_type{
-                dma::AVP{da::base::AvpCodeV::VendorId, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{11})},
-                dma::AVP{da::base::AvpCodeV::AcctApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{12})},
+            dma::AVP{da::common::AvpCodeV::VendorSpecificApplicationId, dma::Flags{}, std::nullopt, dma::Grouped(dma::Grouped::value_type{
+                dma::AVP{da::common::AvpCodeV::VendorId, dma::Flags{dma::Flag::Mandatory}, std::nullopt, dma::Unsigned32(uint32_t{11})},
+                dma::AVP{da::common::AvpCodeV::AcctApplicationId, dma::Flags{}, std::nullopt, dma::Unsigned32(uint32_t{12})},
             })}
         }
     };

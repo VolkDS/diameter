@@ -5,7 +5,7 @@
 #include <set>
 #include <string>
 
-#include <diameter/application/base/command.h>
+#include <diameter/application/common/common.h>
 #include <diameter/core/error.h>
 #include <diameter/message/avp/vendor_id.h>
 #include <diameter/message/header/application_id.h>

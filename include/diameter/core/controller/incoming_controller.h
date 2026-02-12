@@ -12,7 +12,8 @@
 
 #include <diameter/core/io/connection.h>
 #include <diameter/core/peer/info.h>
-#include <diameter/application/base/command.h>
+#include <diameter/application/common/command.h>
+#include <diameter/log/log.h>
 #include <diameter/message/message.h>
 
 namespace diameter::core::controller {
@@ -104,6 +105,7 @@ private:
         }
 
         if (error != boost::asio::error::operation_aborted) {
+            DIAMETER_LOG_ERROR("conn_id="<< conn_id << ": Timeout for CER");
             connect->stop();
         }      
     }
@@ -148,7 +150,7 @@ private:
     {
         if (message->header.application_id == message::header::ApplicationV::Common) {
             if (message->header.command_flags[message::header::CommandFlag::Request]) {
-                if (message->header.command_code == application::base::CommandV::CapabilitiesExchange) {
+                if (message->header.command_code == application::common::CommandV::CapabilitiesExchange) {
                     return true;
                 }
             }

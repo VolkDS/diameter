@@ -13,6 +13,7 @@
 #include <netpacker/netpacker.h>
 
 #include <diameter/core/config/config.h>
+#include <diameter/log/log.h>
 #include <diameter/serial/serial.h>
 
 namespace diameter::core::io {
@@ -129,6 +130,7 @@ private:
         if (m_stopped.exchange(true)) {
             return;
         }
+        DIAMETER_LOG_DEBUG("Stopping connection");
 
         boost::system::error_code ec;
         if (with_shutdown) {
@@ -168,6 +170,7 @@ private:
 
     void on_read_header(const boost::system::error_code& error, size_t bytes_transferred)
     {
+        DIAMETER_LOG_TRACE("on_read_header: " << bytes_transferred << " bytes, error: " << error << " (" << error.message() << ")");
         if (is_stopped()) {
             return;
         }
@@ -204,6 +207,7 @@ private:
             start_recv_header();
         }
         catch (const std::exception& e) {
+            DIAMETER_LOG_ERROR("Decode header failed: " << e.what());
             do_shutdown(boost::system::error_code(boost::system::errc::protocol_error,
                 boost::system::system_category()));
         }
@@ -211,6 +215,7 @@ private:
 
     void on_read_message(const boost::system::error_code& error, size_t bytes_transferred)
     {
+        DIAMETER_LOG_TRACE("on_read_message: " << bytes_transferred << " bytes, error: " << error << " (" << error.message() << ")");
         if (is_stopped()) {
             return;
         }
@@ -229,6 +234,7 @@ private:
             start_recv_header();
         }
         catch (const std::exception& e) {
+            DIAMETER_LOG_ERROR("Decode message failed: " << e.what());
             do_shutdown(boost::system::error_code(boost::system::errc::protocol_error,
                 boost::system::system_category())
             );
@@ -267,6 +273,7 @@ private:
 
     void on_write_complete(const boost::system::error_code& error, size_t bytes_transferred)
     {
+        DIAMETER_LOG_TRACE("on_write: " << bytes_transferred << " bytes, error: " << error << " (" << error.message() << ")");
         if (is_stopped()) {
             clear_sending_queue();
             return;
@@ -309,6 +316,7 @@ private:
 
     void call_on_disconnect_cb(const boost::system::error_code& error)
     {
+        DIAMETER_LOG_ERROR("Disconnected");
         OnRecvMessageCb recv_message_cb;
         OnDisconnectCb disconnect_cb;
         {

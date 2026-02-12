@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
 
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+endif()
+
 project(diameter LANGUAGES CXX)
 
 string(COMPARE EQUAL "${CMAKE_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}" is_top_level)
@@ -52,6 +56,7 @@ if (DIAMETER_ENABLE_CPPCHECK)
                     "--language=c++"
                     "--platform=unix64"
                     "--std=c++17"
+                    "--check-level=exhaustive"
             )
         endif()
     else()
@@ -68,6 +73,9 @@ endif()
 if(NOT TARGET netpacker::netpacker)
   message(FATAL_ERROR "Not found target netpacker::netpacker")
 endif()
+if(NOT TARGET Boost::boost)
+  message(FATAL_ERROR "Not found target Boost::boost")
+endif()
 
 ### Library target
 if (DIAMETER_HEADER_ONLY)
@@ -81,6 +89,7 @@ if (DIAMETER_HEADER_ONLY)
     )
     target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
     target_link_libraries(${PROJECT_NAME} INTERFACE netpacker::netpacker)
+    target_link_libraries(${PROJECT_NAME} INTERFACE Boost::boost)
 else()
     file(GLOB_RECURSE DIAMETER_SRC src/*.cpp)
     source_group ("Source Files" FILES ${DIAMETER_SRC})
@@ -92,12 +101,19 @@ else()
         PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
             $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+            ${NETPACKER_INCLUDE_DIRS}
+    )
+
+    target_include_directories(${PROJECT_NAME}
+        SYSTEM PUBLIC
+            ${Boost_INCLUDE_DIRS}
     )
 
     default_cxx_compile_settings_default(${PROJECT_NAME})
     default_cxx_compile_settings_warnings(${PROJECT_NAME})
 
-    target_link_libraries(${PROJECT_NAME} PUBLIC netpacker::netpacker)
+    # target_link_libraries(${PROJECT_NAME} INTERFACE netpacker::netpacker)
+    # target_link_libraries(${PROJECT_NAME} INTERFACE Boost::boost)
 endif()
 
 ### Other targets

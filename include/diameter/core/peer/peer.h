@@ -5,12 +5,13 @@
 #include <string>
 #include <variant>
 
-#include <diameter/application/base/command.h>
+#include <diameter/application/common/common.h>
 #include <diameter/core/io/connection.h>
 #include <diameter/core/io/connector.h>
 #include <diameter/core/fsm.h>
 #include <diameter/core/peer/info.h>
 #include <diameter/core/peer/ipeer.h>
+#include <diameter/log/log.h>
 #include <diameter/message/message.h>
 
 namespace diameter::core::peer {
@@ -47,6 +48,7 @@ public:
     //The stable states that a state machine may be in are Closed, I-Open, and R-Open
     using OnStableStateCb = std::function<void()>;
     using OnRecvCommonMessageCb = std::function<MessagePtr(MessagePtr&&)>;
+    using OnGenerateCEACb = std::function<MessagePtr(const MessagePtr&, const PeerInfo&)>;
 
     enum class States : uint32_t
     {
@@ -85,12 +87,53 @@ public:
         R_RCV_DPA
     };
 
+    friend std::ostream& operator<<(std::ostream& os, const States& state) {
+        switch (state) {
+            case States::CLOSED:         return os << "CLOSED";
+            case States::WAIT_CONN_ACK:  return os << "WAIT_CONN_ACK";
+            case States::WAIT_CEA:       return os << "WAIT_CEA";
+            case States::ELECT:          return os << "ELECT";
+            case States::WAIT_RETURNS:   return os << "WAIT_RETURNS";
+            case States::ROPEN:          return os << "ROPEN";
+            case States::IOPEN:          return os << "IOPEN";
+            case States::CLOSING:        return os << "CLOSING";
+            default:                     return os << "UNKNOWN_STATE(" 
+                                                 << static_cast<uint32_t>(state) << ")";
+        }
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const Events& event) {
+        switch (event) {
+            case Events::START:              return os << "START";
+            case Events::R_CONN_CER:         return os << "R_CONN_CER";
+            case Events::I_RCV_CONN_ACK:     return os << "I_RCV_CONN_ACK";
+            case Events::I_RCV_CONN_NACK:    return os << "I_RCV_CONN_NACK";
+            case Events::TIMEOUT:            return os << "TIMEOUT";
+            case Events::I_RCV_CEA:          return os << "I_RCV_CEA";
+            case Events::I_PEER_DISC:        return os << "I_PEER_DISC";
+            case Events::R_PEER_DISC:        return os << "R_PEER_DISC";
+            case Events::WIN_ELECTION:       return os << "WIN_ELECTION";
+            case Events::SEND_MESSAGE:       return os << "SEND_MESSAGE";
+            case Events::R_RCV_MESSAGE:      return os << "R_RCV_MESSAGE";
+            case Events::R_RCV_DWR:          return os << "R_RCV_DWR";
+            case Events::R_RCV_DWA:          return os << "R_RCV_DWA";
+            case Events::STOP:               return os << "STOP";
+            case Events::R_RCV_DPR:          return os << "R_RCV_DPR";
+            case Events::I_RCV_MESSAGE:      return os << "I_RCV_MESSAGE";
+            case Events::I_RCV_DWR:          return os << "I_RCV_DWR";
+            case Events::I_RCV_DWA:          return os << "I_RCV_DWA";
+            case Events::I_RCV_DPR:          return os << "I_RCV_DPR";
+            case Events::I_RCV_DPA:          return os << "I_RCV_DPA";
+            case Events::R_RCV_DPA:          return os << "R_RCV_DPA";
+            default:                         return os << "UNKNOWN_EVENT(" 
+                                                     << static_cast<uint32_t>(event) << ")";
+        }
+    }
+
     using FsmType = diameter::core::StateMachine<States, Events, Peer, FsmUserDataType&&>;
     using FsmTransitionTableType = FsmType::transition_table_t;
 
     using IdentityType = std::string;
-
-    using on_send_message_error_t = std::function<void(message::Message&&)>;
 
     template<typename... Args>
     static SelfPtr create(Args&&... args)
@@ -105,17 +148,17 @@ public:
 
     void start(const ConnectorPtr& connector)
     {
-        m_fsm.process_event(Events::START,  std::move(connector));
+        process_fsm_event(Events::START,  std::move(connector));
     }
 
     void stop()
     {
-        m_fsm.process_event(Events::STOP);
+        process_fsm_event(Events::STOP);
     }
 
     void responder_connection_CER(IncomingData&& incoming_data)
     {
-        m_fsm.process_event(Events::R_CONN_CER, std::move(incoming_data));
+        process_fsm_event(Events::R_CONN_CER, std::move(incoming_data));
     }
 
     IdentityType full_id() const
@@ -156,10 +199,22 @@ public:
         m_on_closed_state_cb = std::move(handler);
     }
 
+    void set_on_generate_CEA_cb(OnGenerateCEACb&& handler)
+    {
+        std::unique_lock lock(m_callback_mutex);
+        m_on_generate_CEA_cb = std::move(handler);
+    }
+
+    void set_on_recv_common_message_cb(OnRecvCommonMessageCb&& handler)
+    {
+
+    }
+
 private:
-    Peer(const IdentityType& local_host, const IdentityType& local_realm,
+    Peer(const std::string& name, const IdentityType& local_host, const IdentityType& local_realm,
         const IdentityType& remote_host, const IdentityType& remote_realm)
-        : m_local_host(local_host),
+        : m_name(name),
+          m_local_host(local_host),
           m_local_realm(local_realm),
           m_remote_host(remote_host),
           m_remote_realm(remote_realm),
@@ -173,7 +228,18 @@ private:
         );
     }
 
-    static const FsmTransitionTableType m_fsm_transition_table;
+    bool process_fsm_event(const Events& event)
+    {
+        return process_fsm_event(event, nullptr);
+    }
+
+    bool process_fsm_event(const Events& event, FsmUserDataType&& ud)
+    {
+        DIAMETER_LOG_DEBUG("[peer="<< m_name <<"] Event " << event << " in state " << m_fsm.state());
+        bool processed = m_fsm.process_event(event, std::forward<FsmUserDataType>(ud));
+        DIAMETER_LOG_DEBUG("[peer="<< m_name <<"] New state " << m_fsm.state());
+        return processed;
+    }
 
     // A transport connection is initiated with the peer.
     void initiator_start_connection(FsmUserDataType&& ud)
@@ -183,11 +249,11 @@ private:
         m_connector->set_on_connect_cb([self](const boost::system::error_code& error,
                                        io::Connector::SocketType&& socket) {
             if (error) {
-                self->m_fsm.process_event(Events::I_RCV_CONN_NACK);
+                self->process_fsm_event(Events::I_RCV_CONN_NACK);
                 return;
             }
             auto connection = io::Connection::create(std::move(socket));
-            self->m_fsm.process_event(Events::I_RCV_CONN_ACK, std::move(connection));
+            self->process_fsm_event(Events::I_RCV_CONN_ACK, std::move(connection));
         });
         m_connector->run();
     }
@@ -196,50 +262,50 @@ private:
     // connection.
     void responder_accept(FsmUserDataType&& ud)
     {
-        auto incoming_data = std::get<IncomingData>(std::move(ud));
+        auto incoming_data = std::get<IncomingData>(ud);
         m_responder = std::move(incoming_data.connection);
-        auto CER_message = std::move(incoming_data.CER_message);
-        auto remote_peer_info = std::move(incoming_data.remote_peer_info);
+        m_responder_CER_message = std::move(incoming_data.CER_message);
+        m_responder_peer_info = std::move(incoming_data.remote_peer_info);
 
         auto self = shared_from_this();
-        m_responder->set_on_disconnect_cb([self](const boost::system::error_code& error) {
-            self->m_fsm.process_event(Events::R_PEER_DISC);
+        m_responder->set_on_disconnect_cb([self](const boost::system::error_code& /*error*/) {
+            //DIAMETER_LOG_ERROR("[peer="<< self->m_name <<"] responder on_disconnect: " << error << " (" << error.message() << ")");
+            self->process_fsm_event(Events::R_PEER_DISC);
         });
         m_responder->set_on_recv_message_cb([self](MessagePtr&& message) {
             if (message->header.application_id == message::header::ApplicationV::Common) {
                 if (message->header.command_flags[message::header::CommandFlag::Request]) {
                     switch (message->header.command_code)
                     {
-                        case application::base::CommandV::DeviceWatchdog:
-                            self->m_fsm.process_event(Events::R_RCV_DWR, std::move(message));
+                        case application::common::CommandV::DeviceWatchdog:
+                            self->process_fsm_event(Events::R_RCV_DWR, std::move(message));
                             break;
-                        case application::base::CommandV::DisconnectPeer:
-                            self->m_fsm.process_event(Events::R_RCV_DPR, std::move(message));
+                        case application::common::CommandV::DisconnectPeer:
+                            self->process_fsm_event(Events::R_RCV_DPR, std::move(message));
                             break;
                         default:
-                            self->m_fsm.process_event(Events::R_RCV_MESSAGE, std::move(message));
                             break;
                     }
                 }
                 else {
                     switch (message->header.command_code)
                     {
-                        case application::base::CommandV::DeviceWatchdog:
-                            self->m_fsm.process_event(Events::R_RCV_DWR, std::move(message));
+                        case application::common::CommandV::DeviceWatchdog:
+                            self->process_fsm_event(Events::R_RCV_DWA, std::move(message));
                             break;
-                        case application::base::CommandV::DisconnectPeer:
-                            self->m_fsm.process_event(Events::R_RCV_DPR, std::move(message));
+                        case application::common::CommandV::DisconnectPeer:
+                            self->process_fsm_event(Events::R_RCV_DPA, std::move(message));
                             break;
                         default:
-                            self->m_fsm.process_event(Events::R_RCV_MESSAGE, std::move(message));
                             break;
                     }
                 }
+                return;
             }
-            self->m_fsm.process_event(Events::R_RCV_MESSAGE, std::move(message));
+            self->process_fsm_event(Events::R_RCV_MESSAGE, std::move(message));
         });
 
-        process_CER(CER_message, remote_peer_info);
+        process_CER();
     }
 
     // The incoming connection associated with the R_Conn_CER is disconnected.
@@ -257,43 +323,43 @@ private:
 
         auto self = shared_from_this();
         m_initiator->set_on_disconnect_cb([self](const boost::system::error_code& /*error*/) {
-            self->m_fsm.process_event(Events::I_PEER_DISC);
+            //DIAMETER_LOG_ERROR("[peer="<< self->m_name <<"] initiator on_disconnect: " << error << " (" << error.message() << ")");
+            self->process_fsm_event(Events::I_PEER_DISC);
         });
         m_initiator->set_on_recv_message_cb([self](MessagePtr&& message) {
             if (message->header.application_id == message::header::ApplicationV::Common) {
                 if (message->header.command_flags[message::header::CommandFlag::Request]) {
                     switch (message->header.command_code)
                     {
-                        case application::base::CommandV::DeviceWatchdog:
-                            self->m_fsm.process_event(Events::I_RCV_DWR, std::move(message));
+                        case application::common::CommandV::DeviceWatchdog:
+                            self->process_fsm_event(Events::I_RCV_DWR, std::move(message));
                             break;
-                        case application::base::CommandV::DisconnectPeer:
-                            self->m_fsm.process_event(Events::I_RCV_DPR, std::move(message));
+                        case application::common::CommandV::DisconnectPeer:
+                            self->process_fsm_event(Events::I_RCV_DPR, std::move(message));
                             break;
                         default:
-                            self->m_fsm.process_event(Events::I_RCV_MESSAGE, std::move(message));
                             break;
                     }
                 }
                 else {
                     switch (message->header.command_code)
                     {
-                        case application::base::CommandV::CapabilitiesExchange:
-                            self->m_fsm.process_event(Events::I_RCV_CEA, std::move(message));
+                        case application::common::CommandV::CapabilitiesExchange:
+                            self->process_fsm_event(Events::I_RCV_CEA, std::move(message));
                             break;
-                        case application::base::CommandV::DeviceWatchdog:
-                            self->m_fsm.process_event(Events::I_RCV_DWR, std::move(message));
+                        case application::common::CommandV::DeviceWatchdog:
+                            self->process_fsm_event(Events::I_RCV_DWA, std::move(message));
                             break;
-                        case application::base::CommandV::DisconnectPeer:
-                            self->m_fsm.process_event(Events::I_RCV_DPR, std::move(message));
+                        case application::common::CommandV::DisconnectPeer:
+                            self->process_fsm_event(Events::I_RCV_DPA, std::move(message));
                             break;
                         default:
-                            self->m_fsm.process_event(Events::I_RCV_MESSAGE, std::move(message));
                             break;
                     }
                 }
+                return;
             }
-            self->m_fsm.process_event(Events::I_RCV_MESSAGE, std::move(message));
+            self->process_fsm_event(Events::I_RCV_MESSAGE, std::move(message));
         });
         m_initiator->run();
 
@@ -315,7 +381,7 @@ private:
     void responder_send_CEA(FsmUserDataType&& /*ud*/)
     {
         // TODO: callback for generate CEA message
-        auto CEA_message = std::make_shared<message::Message>();
+        auto CEA_message = m_on_generate_CEA_cb(m_responder_CER_message, m_responder_peer_info);
         m_responder->send_message(CEA_message);
     }
 
@@ -362,7 +428,7 @@ private:
 
         if (is_win) {
             // TODO: Important! This call should be after the end off prev action
-            m_fsm.process_event(Events::WIN_ELECTION);
+            process_fsm_event(Events::WIN_ELECTION);
         }
     }
 
@@ -409,10 +475,8 @@ private:
     }
 
     // The CER associated with the R_Conn_CER is processed.
-    void process_CER(const MessagePtr& CER_message, const PeerInfo& peer_info)
+    void process_CER()
     {
-        // TODO: Make some checks for CER and after send CEA
-
         if (m_fsm.state() == States::CLOSED) {
             responder_send_CEA(nullptr);
         }
@@ -434,8 +498,16 @@ private:
     {
         auto DWR_message = std::get<MessagePtr>(std::move(ud));
 
+        auto DWA_builder = application::common::DeviceWatchdogBuilder();
+        MessagePtr DWA_message = DWA_builder
+            .set_hop_by_hop(DWR_message->header.hop_by_hop)
+            .set_end_to_end(DWR_message->header.end_to_end)
+            .add_result_code(application::common::ResultCodeV::SUCCESS)
+            .add_origin_host(m_local_host)
+            .add_origin_realm(m_local_realm)
+            .build();
+
         std::shared_lock lock(m_callback_mutex);
-        MessagePtr DWA_message;
         if (m_on_recv_DWR_cb) {
             DWA_message = m_on_recv_DWR_cb(std::move(DWR_message));
         }
@@ -462,18 +534,40 @@ private:
     // A DWR/DWA message is sent.
     void initiator_send_DWR(FsmUserDataType&& ud)
     {
+        initiator_send_message(std::forward<FsmUserDataType>(ud));
     }
 
-    void initiator_send_DWA(FsmUserDataType&& ud);
-    void responder_send_DWR(FsmUserDataType&& ud);
-    void responder_send_DWA(FsmUserDataType&& ud);
+    void initiator_send_DWA(FsmUserDataType&& ud)
+    {
+        initiator_send_message(std::forward<FsmUserDataType>(ud));
+    }
+
+    void responder_send_DWR(FsmUserDataType&& ud)
+    {
+        responder_send_message(std::forward<FsmUserDataType>(ud));
+    }
+    void responder_send_DWA(FsmUserDataType&& ud)
+    {
+        responder_send_message(std::forward<FsmUserDataType>(ud));
+    }
 
     // A DPR/DPA message is sent to the peer.
-    void initiator_send_DPR(FsmUserDataType&& ud);
-    void initiator_send_DPA(FsmUserDataType&& ud);
-    void responder_send_DPR(FsmUserDataType&& ud);
-    void responder_send_DPA(FsmUserDataType&& ud);
+    void initiator_send_DPR(FsmUserDataType&& ud)
+    {
+    }
+    void initiator_send_DPA(FsmUserDataType&& ud)
+    {
+    }
+    void responder_send_DPR(FsmUserDataType&& ud)
+    {
+    }
+    void responder_send_DPA(FsmUserDataType&& ud)
+    {
+    }
 
+    static const FsmTransitionTableType m_fsm_transition_table;
+
+    std::string m_name;
     IdentityType m_local_host;
     IdentityType m_local_realm;
     IdentityType m_remote_host;
@@ -482,18 +576,19 @@ private:
 
     FsmType m_fsm;
 
-    on_send_message_error_t on_send_message_error;
-
     ConnectorPtr m_connector;
     ConnectionPtr m_initiator;
     ConnectionPtr m_responder;
+
+    MessagePtr m_responder_CER_message;
+    PeerInfo m_responder_peer_info;
 
     std::shared_mutex m_callback_mutex;
     OnStableStateCb m_on_open_state_cb;
     OnStableStateCb m_on_closed_state_cb;
     OnRecvMessageCb m_on_recv_message_cb;
 
-    //m_on_generate_CER_cb;
+    OnGenerateCEACb m_on_generate_CEA_cb;
     //m_on_generate_DWR_cb;
     //m_on_generate_DPR_cb;
 

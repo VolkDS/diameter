@@ -1,9 +1,9 @@
-#ifndef DIAMETER_APPLICATION_BASE_COMMAND_H
-#define DIAMETER_APPLICATION_BASE_COMMAND_H
+#ifndef DIAMETER_APPLICATION_COMMON_COMMAND_H
+#define DIAMETER_APPLICATION_COMMON_COMMAND_H
 
 #include <diameter/message/header/command_code.h>
 
-namespace diameter::application::base {
+namespace diameter::application::common {
 
 struct CommandV
 {

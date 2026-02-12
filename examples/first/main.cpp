@@ -6,8 +6,7 @@
 
 #include <netpacker/netpacker.h>
 
-#include <diameter/application/base/command.h>
-#include <diameter/application/base/id.h>
+#include <diameter/application/common/common.h>
 #include <diameter/message/message.h>
 #include <diameter/serial/serial.h>
 
@@ -23,7 +22,7 @@ int main()
     msg.header.version = dmh::ProtocolVersionV::V01;
     msg.header.command_flags.set(dmh::CommandFlag::Request);
     msg.header.command_flags.set(dmh::CommandFlag::Proxiable);
-    msg.header.command_code = da::base::CommandV::DeviceWatchdog;
+    msg.header.command_code = da::common::CommandV::DeviceWatchdog;
     msg.header.application_id = dmh::ApplicationV::Relay;
     msg.header.hop_by_hop = 1;
     msg.header.end_to_end = 1;

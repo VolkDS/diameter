@@ -1,0 +1,55 @@
+---
+acceptors:
+  TEST1:
+    local_peer_name: "MAIN"
+    transport_type: "tcp"
+    local_address: ["127.0.0.1"]
+    local_port: 3868
+    capability_timeout: 5
+    use_tls: false
+    allow_dynamic_peers: false
+
+local_peers:
+  MAIN:
+    origin_host: "main.epc.mnc000.mcc000.3gppnetwork.org"
+    origin_realm: "epc.mnc000.mcc000.3gppnetwork.org"
+    vendor_id: 0
+    product_name: "BestDiameter"
+    supported_vendor_ids: [0,1,2]
+    auth_application_ids: [0,1,2]
+    acct_application_ids: [0,1,2]
+    vendor_specific_application_ids:
+      - vendor_id: 10245
+        application_id: 940912
+      - vendor_id: 10246
+        application_id: 940910
+
+peers:
+  TEST1:
+    local_peer_name: "MAIN"
+    role: "client"
+    transport_type: "tcp"
+    local_address: ["127.0.0.1"]
+    local_port: 3868
+    remote_address: ["127.0.0.1"]
+    remote_port: 3869
+    remote_host: "test1.epc.mnc000.mcc000.3gppnetwork.org"
+    remote_realm: "epc.mnc000.mcc000.3gppnetwork.org"
+    use_tls: false
+    reconnect_timeout: 5
+    watchdog_timeout: 10
+    request_timeout: 1
+  TEST2:
+    local_peer_name: "MAIN"
+    role: "client"
+    transport_type: "tcp"
+    local_address: ["127.0.0.1"]
+    local_port: 3868
+    remote_address: ["127.0.0.1"]
+    remote_port: 3870
+    remote_host: "test1.epc.mnc000.mcc000.3gppnetwork.org"
+    remote_realm: "epc.mnc000.mcc000.3gppnetwork.org"
+    use_tls: false
+    reconnect_timeout: 5
+    watchdog_timeout: 10
+    request_timeout: 1
