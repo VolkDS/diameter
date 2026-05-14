@@ -7,14 +7,14 @@
 #include <boost/asio/ip/tcp.hpp>
 
 #include <diameter/core/config/config.h>
+#include <diameter/log/log.h>
 
 namespace diameter::core::io {
 
-class Connector
-    : public std::enable_shared_from_this<Connector>
+class Connector : public std::enable_shared_from_this<Connector>
 {
 public:
-    using ProtocolType = boost::asio::ip::tcp; //move to template
+    using ProtocolType = boost::asio::ip::tcp; // move to template
     using SelfPtr = std::shared_ptr<Connector>;
     using SocketType = ProtocolType::socket;
     using EndpointType = ProtocolType::endpoint;
@@ -98,6 +98,7 @@ private:
 
     void start_local_bind()
     {
+        DIAMETER_LOG_DEBUG("start_local_bind()");
         ResolverQueryType query(m_src_address.host[0],
             std::to_string(static_cast<unsigned int>(m_src_address.port)));
 
@@ -107,8 +108,10 @@ private:
         });
     }
 
-    void on_src_address_resolve_handler(const boost::system::error_code& error, ResolverIterType iterator)
+    void on_src_address_resolve_handler(const boost::system::error_code& error,
+        ResolverIterType iterator)
     {
+        DIAMETER_LOG_DEBUG("on_src_address_resolve_handler()");
         if (is_stopped()) {
             return;
         }
@@ -135,7 +138,8 @@ private:
                 return;
             }
             catch (const boost::system::system_error& ex) {
-                std::cerr << "Bind failed for " << endpoint.address().to_string() << ": " << ex.what() << std::endl;
+                DIAMETER_LOG_ERROR("Bind failed for " << endpoint.address().to_string() << ": "
+                                                      << ex.what());
                 continue;
             }
         }
@@ -146,6 +150,7 @@ private:
 
     void start_connect()
     {
+        DIAMETER_LOG_DEBUG("start_connect()");
         ResolverQueryType query(m_dst_address.host[0],
             std::to_string(static_cast<unsigned int>(m_dst_address.port)));
 
@@ -155,8 +160,10 @@ private:
         });
     }
 
-    void on_dst_address_resolve_handler(const boost::system::error_code& error, ResolverIterType iterator)
+    void on_dst_address_resolve_handler(const boost::system::error_code& error,
+        ResolverIterType iterator)
     {
+        DIAMETER_LOG_DEBUG("on_dst_address_resolve_handler()");
         if (is_stopped()) {
             return;
         }
@@ -171,6 +178,7 @@ private:
 
     void async_connect(ResolverIterType iterator)
     {
+        DIAMETER_LOG_DEBUG("async_connect()");
         if (iterator == ResolverType::iterator()) {
             start_timer();
             return;
@@ -185,12 +193,14 @@ private:
 
     void on_async_connect_handler(ResolverIterType iterator, const boost::system::error_code& error)
     {
+        DIAMETER_LOG_DEBUG("on_async_connect_handler()");
         if (is_stopped()) {
             return;
         }
 
         if (error) {
-            async_connect(iterator++);
+            DIAMETER_LOG_ERROR("on_async_connect(): " << error.message());
+            async_connect(++iterator);
             return;
         }
 
@@ -199,7 +209,12 @@ private:
 
     void start_timer()
     {
+        if (m_socket.is_open()) {
+            m_socket.close();
+        }
+
         // TODO: config
+        DIAMETER_LOG_DEBUG("start_timer()");
         auto self = shared_from_this();
         m_timer.expires_from_now(std::chrono::seconds(1));
         m_timer.async_wait([self](auto&&... args) {
@@ -230,11 +245,10 @@ private:
         }
 
         if (connect_cb) {
-            boost::asio::post(m_socket.get_executor(),
-                [connect_cb = std::move(connect_cb), error, socket = std::move(m_socket)]() mutable {
-                    connect_cb(error, std::move(socket));
-                }
-            );
+            boost::asio::post(m_socket.get_executor(), [connect_cb = std::move(connect_cb), error,
+                                                           socket = std::move(m_socket)]() mutable {
+                connect_cb(error, std::move(socket));
+            });
         }
     }
 

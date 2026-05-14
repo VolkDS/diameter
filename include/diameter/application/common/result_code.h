@@ -53,6 +53,6 @@ struct ResultCodeV
         NO_COMMON_SECURITY = 5017
     };
 };
-}
+} // namespace diameter::application::common
 
 #endif

@@ -9,6 +9,19 @@
 
 namespace diameter::application::common {
 
+//  <answer-message> ::= < Diameter Header: code, ERR [, PXY] >
+//                    0*1< Session-Id >
+//                       { Origin-Host }
+//                       { Origin-Realm }
+//                       { Result-Code }
+//                       [ Origin-State-Id ]
+//                       [ Error-Message ]
+//                       [ Error-Reporting-Host ]
+//                       [ Failed-AVP ]
+//                       [ Experimental-Result ]
+//                     * [ Proxy-Info ]
+//                     * [ AVP ]
+
 template<class T>
 class MessageBuilder
 {
@@ -73,7 +86,8 @@ public:
         return static_cast<T&>(*this);
     }
 
-    std::shared_ptr<message::Message> build() {
+    std::shared_ptr<message::Message> build()
+    {
         return std::move(message);
     }
 
@@ -114,8 +128,7 @@ protected:
 //           [ Firmware-Revision ]
 //         * [ AVP ]
 
-class CapabilitiesExchangeBuilder
-    : public MessageBuilder<CapabilitiesExchangeBuilder>
+class CapabilitiesExchangeBuilder : public MessageBuilder<CapabilitiesExchangeBuilder>
 {
 public:
     CapabilitiesExchangeBuilder()
@@ -214,7 +227,8 @@ public:
         return *this;
     }
 
-    CapabilitiesExchangeBuilder& add_vendor_specific_auth_application_id(uint32_t vendor_id, uint32_t application_id)
+    CapabilitiesExchangeBuilder& add_vendor_specific_auth_application_id(uint32_t vendor_id,
+        uint32_t application_id)
     {
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::VendorSpecificApplicationId},
@@ -240,7 +254,8 @@ public:
         return *this;
     }
 
-    CapabilitiesExchangeBuilder& add_vendor_specific_acct_application_id(uint32_t vendor_id, uint32_t application_id)
+    CapabilitiesExchangeBuilder& add_vendor_specific_acct_application_id(uint32_t vendor_id,
+        uint32_t application_id)
     {
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::VendorSpecificApplicationId},
@@ -282,8 +297,7 @@ public:
 //            [ Origin-State-Id ]
 //          * [ AVP ]
 
-class DeviceWatchdogBuilder
-    : public MessageBuilder<DeviceWatchdogBuilder>
+class DeviceWatchdogBuilder : public MessageBuilder<DeviceWatchdogBuilder>
 {
 public:
     DeviceWatchdogBuilder()
@@ -293,6 +307,44 @@ public:
     }
 };
 
-}
+// <DPR>  ::= < Diameter Header: 282, REQ >
+//            { Origin-Host }
+//            { Origin-Realm }
+//            { Disconnect-Cause }
+//          * [ AVP ]
+
+// <DPA>  ::= < Diameter Header: 282 >
+//            { Result-Code }
+//            { Origin-Host }
+//            { Origin-Realm }
+//            [ Error-Message ]
+//            [ Failed-AVP ]
+//          * [ AVP ]
+
+class DisconnectPeerBuilder : public MessageBuilder<DisconnectPeerBuilder>
+{
+public:
+    DisconnectPeerBuilder()
+        : MessageBuilder()
+    {
+        message->header.command_code = application::common::CommandV::DisconnectPeer;
+    }
+
+    DisconnectPeerBuilder& add_disconnect_cause(
+        message::avp::Enumerated::value_type::value_type value)
+    {
+        auto avp = message::avp::AVP {
+            message::avp::Code{application::common::AvpCodeV::DisconnectCause},
+            message::avp::Flags{},
+            std::nullopt,
+            message::avp::Enumerated(value)
+        };
+        avp.flags.set(message::avp::Flag::Mandatory);
+        message->avps.push_back(std::move(avp));
+        return *this;
+    }
+};
+
+} // namespace diameter::application::common
 
 #endif

@@ -123,3 +123,36 @@ IncomingController-->Connection
 IncomingController..>PeerInfo
 @enduml
 ```
+
+```plantuml
+@startuml
+cloud INITIAL
+cloud OKAY
+cloud SUSPECT
+cloud DOWN
+cloud REOPEN
+
+OKAY --> OKAY: recv_DWA
+OKAY --> OKAY: recv_message
+SUSPECT --> OKAY: recv_DWA
+SUSPECT --> OKAY: recv_message
+REOPEN --> OKAY: recv_DWA + numDWA(2)
+REOPEN --> REOPEN: recv_DWA + numDWA(<2)
+REOPEN --> REOPEN: recv_message
+INITIAL --> INITIAL: recv_DWA
+INITIAL --> INITIAL: recv_message
+DOWN --> DOWN: recv_DWA
+DOWN --> DOWN: recv_message
+OKAY --> OKAY: timer_expires(pending)
+OKAY --> SUSPECT: timer_expires
+SUSPECT --> DOWN: timer_expires
+DOWN --> DOWN: timer_expires
+REOPEN --> REOPEN: timer_expires
+REOPEN --> DOWN: timer_expires
+INITIAL --> OKAY: connection_open
+DOWN --> REOPEN: connection_open
+OKAY --> DOWN: connection_close
+SUSPECT --> DOWN: connection_close
+REOPEN --> DOWN: connection_close
+@enduml
+```

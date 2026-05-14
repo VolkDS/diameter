@@ -18,11 +18,10 @@
 
 namespace diameter::core::io {
 
-class Connection
-    : public std::enable_shared_from_this<Connection>
+class Connection : public std::enable_shared_from_this<Connection>
 {
 public:
-    using ProtocolType = boost::asio::ip::tcp; //move to template
+    using ProtocolType = boost::asio::ip::tcp; // move to template
     using SelfPtr = std::shared_ptr<Connection>;
     using SocketType = ProtocolType::socket;
     using EndpointType = ProtocolType::endpoint;
@@ -46,6 +45,18 @@ public:
     static SelfPtr create(Args&&... args)
     {
         return SelfPtr(new Connection(std::forward<Args>(args)...));
+    }
+
+    std::vector<std::string> local_address() const
+    {
+        boost::system::error_code ignore_error;
+        return {m_socket.local_endpoint(ignore_error).address().to_string()};
+    }
+
+    uint16_t local_port() const
+    {
+        boost::system::error_code ignore_error;
+        return m_socket.local_endpoint(ignore_error).port();
     }
 
     void run()
@@ -114,14 +125,14 @@ private:
     {
         return m_stopped.load();
     }
-    
+
     bool is_sending() const noexcept
     {
         return m_sending.load();
     }
 
     void do_shutdown(const boost::system::error_code& error = {})
-    {     
+    {
         do_close(error, true);
     }
 
@@ -164,13 +175,13 @@ private:
         boost::asio::async_read(m_socket, boost::asio::buffer(m_header_buffer),
             [self](auto&&... args) {
                 self->on_read_header(std::forward<decltype(args)>(args)...);
-            }
-        );
+            });
     }
 
     void on_read_header(const boost::system::error_code& error, size_t bytes_transferred)
     {
-        DIAMETER_LOG_TRACE("on_read_header: " << bytes_transferred << " bytes, error: " << error << " (" << error.message() << ")");
+        DIAMETER_LOG_TRACE("on_read_header: " << bytes_transferred << " bytes, error: " << error
+                                              << " (" << error.message() << ")");
         if (is_stopped()) {
             return;
         }
@@ -195,8 +206,7 @@ private:
                     boost::asio::buffer(m_message_buffer.data() + header.size(), need_bytes_size),
                     [self](auto&&... args) {
                         self->on_read_message(std::forward<decltype(args)>(args)...);
-                    }
-                );
+                    });
                 return;
             }
 
@@ -215,7 +225,8 @@ private:
 
     void on_read_message(const boost::system::error_code& error, size_t bytes_transferred)
     {
-        DIAMETER_LOG_TRACE("on_read_message: " << bytes_transferred << " bytes, error: " << error << " (" << error.message() << ")");
+        DIAMETER_LOG_TRACE("on_read_message: " << bytes_transferred << " bytes, error: " << error
+                                               << " (" << error.message() << ")");
         if (is_stopped()) {
             return;
         }
@@ -236,8 +247,7 @@ private:
         catch (const std::exception& e) {
             DIAMETER_LOG_ERROR("Decode message failed: " << e.what());
             do_shutdown(boost::system::error_code(boost::system::errc::protocol_error,
-                boost::system::system_category())
-            );
+                boost::system::system_category()));
         }
     }
 
@@ -249,7 +259,7 @@ private:
         }
 
         if (m_sending.exchange(true)) {
-            //already in send process
+            // already in send process
             return;
         }
 
@@ -267,13 +277,13 @@ private:
         boost::asio::async_write(m_socket, boost::asio::buffer(*current_buffer),
             [self](auto&&... args) {
                 self->on_write_complete(std::forward<decltype(args)>(args)...);
-            }
-        );
+            });
     }
 
     void on_write_complete(const boost::system::error_code& error, size_t bytes_transferred)
     {
-        DIAMETER_LOG_TRACE("on_write: " << bytes_transferred << " bytes, error: " << error << " (" << error.message() << ")");
+        DIAMETER_LOG_TRACE("on_write: " << bytes_transferred << " bytes, error: " << error << " ("
+                                        << error.message() << ")");
         if (is_stopped()) {
             clear_sending_queue();
             return;
@@ -309,8 +319,7 @@ private:
                 [recv_message_cb = std::move(recv_message_cb),
                     message = std::move(message)]() mutable {
                     recv_message_cb(std::move(message));
-                }
-            );
+                });
         }
     }
 
@@ -329,8 +338,7 @@ private:
             boost::asio::post(m_socket.get_executor(),
                 [disconnect_cb = std::move(disconnect_cb), error]() mutable {
                     disconnect_cb(error);
-                }
-            );
+                });
         }
     }
 

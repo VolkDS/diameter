@@ -62,6 +62,6 @@ struct AvpCodeV
     };
 };
 
-}
+} // namespace diameter::application::common
 
 #endif

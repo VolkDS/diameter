@@ -20,12 +20,13 @@ public:
     using action_table_t = std::map<StateT, action_t>;
 
     explicit StateMachine(ContextT* context, const StateT& initial_state,
-        const transition_table_t* transition_table)
+        const transition_table_t* transition_table, const action_table_t* enter_table = nullptr,
+        const action_table_t* exit_table = nullptr)
         : m_context(context),
           m_current_state(initial_state),
           m_transition_table(transition_table),
-          m_enter_table(nullptr),
-          m_exit_table(nullptr)
+          m_enter_table(enter_table),
+          m_exit_table(exit_table)
     {
     }
 
@@ -77,7 +78,7 @@ public:
         return process_event(event, nullptr);
     }
 
-    const StateT& state()
+    const StateT& state() const
     {
         return m_current_state;
     }

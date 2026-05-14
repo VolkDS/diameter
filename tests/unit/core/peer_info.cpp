@@ -21,7 +21,7 @@ BOOST_AUTO_TEST_CASE(default_constructor)
 
     BOOST_CHECK_EQUAL(peer_info.origin_host, std::string());
     BOOST_CHECK_EQUAL(peer_info.origin_realm, std::string());
-    BOOST_CHECK_EQUAL(peer_info.vendor_id, diameter::message::avp::VendorId{});
+    BOOST_CHECK_EQUAL(peer_info.vendor_id, diameter::message::avp::VendorId {});
     BOOST_CHECK_EQUAL(peer_info.product_name, std::string());
 
     BOOST_CHECK_EQUAL(peer_info.inband_security_supported, false);

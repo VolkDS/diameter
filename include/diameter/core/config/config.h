@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <list>
 #include <map>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -117,6 +118,42 @@ struct Config
     Acceptors acceptors;
     LocalPeers local_peers;
     Peers peers;
+
+    std::optional<AcceptorConfig> get_acceptor_config(const std::string& name)
+    {
+        auto it = acceptors.find(name);
+        if (it == acceptors.end()) {
+            return std::nullopt;
+        }
+        return it->second;
+    }
+
+    std::optional<PeerConfig> get_peer_config(const std::string& name)
+    {
+        auto it = peers.find(name);
+        if (it == peers.end()) {
+            return std::nullopt;
+        }
+        return it->second;
+    }
+
+    std::optional<LocalPeerConfig> get_local_peer_config(const std::string& name)
+    {
+        auto it = local_peers.find(name);
+        if (it == local_peers.end()) {
+            return std::nullopt;
+        }
+        return it->second;
+    }
+
+    std::optional<LocalPeerConfig> get_local_peer_config_by_peer(const std::string& name)
+    {
+        auto it = peers.find(name);
+        if (it == peers.end()) {
+            return std::nullopt;
+        }
+        return get_local_peer_config(it->second.local_peer_name);
+    }
 };
 
 } // namespace diameter::core::config

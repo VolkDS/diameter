@@ -6,12 +6,14 @@
 
 using namespace diameter::core;
 
-enum TestEvent {
+enum TestEvent
+{
     EVENT1,
     EVENT2
 };
 
-enum TestState {
+enum TestState
+{
     STATE1,
     STATE2
 };
@@ -19,14 +21,13 @@ enum TestState {
 class TestContext
 {
 public:
-    void action1([[maybe_unused]] const int i = int{})
+    void action1([[maybe_unused]] const int i = int {})
     {
     }
-    void action2([[maybe_unused]] const int i = int{})
+    void action2([[maybe_unused]] const int i = int {})
     {
     }
 };
-
 
 BOOST_AUTO_TEST_SUITE(fsm_tests)
 

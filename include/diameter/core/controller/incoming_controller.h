@@ -3,16 +3,16 @@
 
 #include <chrono>
 #include <functional>
-#include <memory>
 #include <limits>
+#include <memory>
 #include <unordered_map>
 
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 
+#include <diameter/application/common/command.h>
 #include <diameter/core/io/connection.h>
 #include <diameter/core/peer/info.h>
-#include <diameter/application/common/command.h>
 #include <diameter/log/log.h>
 #include <diameter/message/message.h>
 
@@ -26,7 +26,8 @@ public:
     using MessagePtr = std::shared_ptr<message::Message>;
     using TimerPtr = std::shared_ptr<boost::asio::steady_timer>;
 
-    using OnRemoteConnectionCerCb = std::function<void(ConnectionPtr&&, const std::string&, MessagePtr&&)>;
+    using OnRemoteConnectionCerCb
+        = std::function<void(ConnectionPtr&&, const std::string&, MessagePtr&&)>;
 
 private:
     struct WaitingData
@@ -84,7 +85,7 @@ public:
         m_waiting_connections.clear();
     }
 
-    void set_on_remote_connection_CER_cb(OnRemoteConnectionCerCb handler)
+    void set_on_remote_connection_CER_cb(OnRemoteConnectionCerCb&& handler)
     {
         std::lock_guard lock(m_mutex);
         m_on_remote_connection_CER_cb = std::move(handler);
@@ -105,9 +106,9 @@ private:
         }
 
         if (error != boost::asio::error::operation_aborted) {
-            DIAMETER_LOG_ERROR("conn_id="<< conn_id << ": Timeout for CER");
+            DIAMETER_LOG_ERROR("conn_id=" << conn_id << ": Timeout for CER");
             connect->stop();
-        }      
+        }
     }
 
     void on_disconnect(ConnectionId conn_id, const boost::system::error_code& error)
@@ -132,7 +133,7 @@ private:
             it->second.timer->cancel();
             connect = it->second.connect;
             acceptor_name = it->second.acceptor_name;
-        }           
+        }
 
         // 5.6.1. Incoming Connections
         // The logic that handles incoming connections SHOULD close and discard
@@ -150,7 +151,8 @@ private:
     {
         if (message->header.application_id == message::header::ApplicationV::Common) {
             if (message->header.command_flags[message::header::CommandFlag::Request]) {
-                if (message->header.command_code == application::common::CommandV::CapabilitiesExchange) {
+                if (message->header.command_code
+                    == application::common::CommandV::CapabilitiesExchange) {
                     return true;
                 }
             }
@@ -172,5 +174,5 @@ private:
     OnRemoteConnectionCerCb m_on_remote_connection_CER_cb;
 };
 
-}
+} // namespace diameter::core::controller
 #endif

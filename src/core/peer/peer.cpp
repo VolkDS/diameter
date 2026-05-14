@@ -2,6 +2,12 @@
 
 namespace diameter::core::peer {
 
+const Peer::FsmActionTableType Peer::m_fsm_enter_table {
+    {States::IOPEN,  &Peer::enter_open_state  },
+    {States::ROPEN,  &Peer::enter_open_state  },
+    {States::CLOSED, &Peer::enter_closed_state},
+};
+
 const Peer::FsmTransitionTableType Peer::m_fsm_transition_table {
     {{States::CLOSED, Events::START},      {States::WAIT_CONN_ACK, &Peer::initiator_start_connection}},
     {{States::CLOSED, Events::R_CONN_CER}, {States::ROPEN,         &Peer::responder_accept}},
@@ -40,7 +46,7 @@ const Peer::FsmTransitionTableType Peer::m_fsm_transition_table {
     {{States::ROPEN, Events::R_RCV_DWA},     {States::ROPEN,   &Peer::process_DWA}},
     {{States::ROPEN, Events::R_CONN_CER},    {States::ROPEN,   &Peer::responder_reject}},
     {{States::ROPEN, Events::STOP},          {States::CLOSING, &Peer::responder_send_DPR}},
-    {{States::ROPEN, Events::R_RCV_DPR},     {States::CLOSING, &Peer::responder_send_DPA}},
+    {{States::ROPEN, Events::R_RCV_DPR},     {States::CLOSING, &Peer::process_DPR}},
     {{States::ROPEN, Events::R_PEER_DISC},   {States::CLOSED,  &Peer::responder_disconnect}},
 
     {{States::IOPEN, Events::SEND_MESSAGE},  {States::IOPEN,   &Peer::initiator_send_message}},
@@ -49,7 +55,7 @@ const Peer::FsmTransitionTableType Peer::m_fsm_transition_table {
     {{States::IOPEN, Events::I_RCV_DWA},     {States::IOPEN,   &Peer::process_DWA}},
     {{States::IOPEN, Events::R_CONN_CER},    {States::IOPEN,   &Peer::responder_reject}},
     {{States::IOPEN, Events::STOP},          {States::CLOSING, &Peer::initiator_send_DPR}},
-    {{States::IOPEN, Events::I_RCV_DPR},     {States::CLOSING, &Peer::initiator_send_DPA}},
+    {{States::IOPEN, Events::I_RCV_DPR},     {States::CLOSING, &Peer::process_DPR}},
     {{States::IOPEN, Events::I_PEER_DISC},   {States::CLOSED,  &Peer::initiator_disconnect}},
 
     {{States::CLOSING, Events::I_RCV_DPA},   {States::CLOSED,  &Peer::initiator_disconnect}},

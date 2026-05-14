@@ -7,10 +7,10 @@ namespace diameter::log {
 
 } // namespace diameter::log
 
-
-#define DIAMETER_LOG_ACTION(LEVEL, PARAMS) do {\
+#define DIAMETER_LOG_ACTION(LEVEL, PARAMS)                    \
+  do {                                                        \
     std::cout << "[" << LEVEL << "] " << PARAMS << std::endl; \
-} while(0)
+  } while (0)
 
 #define DIAMETER_LOG_FATAL(PARAMS) DIAMETER_LOG_ACTION("FATAL", PARAMS)
 #define DIAMETER_LOG_ERROR(PARAMS) DIAMETER_LOG_ACTION("ERROR", PARAMS)

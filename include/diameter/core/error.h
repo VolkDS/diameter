@@ -6,6 +6,15 @@
 
 namespace diameter::core {
 
+enum class Error : uint32_t
+{
+    Success = 0,
+    DecodingError = 1,
+    EncodingError = 2,
+    NetworkError = 3,
+    Timeout = 4
+};
+
 class Exception : public std::exception
 {
 protected:

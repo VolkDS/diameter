@@ -1,5 +1,5 @@
-#include <diameter/core/peer/info.h>
 #include <diameter/application/common/avp.h>
+#include <diameter/core/peer/info.h>
 
 namespace diameter::core::peer {
 
@@ -39,13 +39,13 @@ namespace diameter::core::peer {
 PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
 {
     if (message->header.application_id != message::header::ApplicationV::Common) {
-        return PeerInfo{};
+        return PeerInfo {};
     }
     if (message->header.command_code != application::common::CommandV::CapabilitiesExchange) {
-        return PeerInfo{};
+        return PeerInfo {};
     }
 
-    auto peer_info = PeerInfo{};
+    auto peer_info = PeerInfo {};
     for (const auto& avp : message->avps) {
         // Origin-Host
         if (avp.code == application::common::AvpCodeV::OriginHost) {
@@ -96,8 +96,8 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
         }
 
         // Inband-Security-Id
-        // AVP is of type Unsigned32 and used in order to advertise support of the security portion of the application.
-        // The use of this AVP in CER and CEA messages is NOT RECOMMENDED.
+        // AVP is of type Unsigned32 and used in order to advertise support of the security portion
+        // of the application. The use of this AVP in CER and CEA messages is NOT RECOMMENDED.
         // NO_INBAND_SECURITY = 0
         // TLS = 1
         if (avp.code == application::common::AvpCodeV::InbandSecurityId) {
@@ -152,11 +152,15 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
             }
 
             if (auth_application_id == 0 && acct_application_id == 0) {
-                throw MissingAvp("Not found Auth-Application-Id or Acct-Application-Id in Vendor-Specific-Application-Id");
+                throw MissingAvp(
+                    "Not found Auth-Application-Id or Acct-Application-Id in "
+                    "Vendor-Specific-Application-Id");
             }
 
             if (auth_application_id != 0 && acct_application_id != 0) {
-                throw AvpOccursTooManyTimes("Found Auth-Application-Id and Acct-Application-Id in Vendor-Specific-Application-Id");
+                throw AvpOccursTooManyTimes(
+                    "Found Auth-Application-Id and Acct-Application-Id in "
+                    "Vendor-Specific-Application-Id");
             }
 
             if (auth_application_id != 0) {
@@ -170,4 +174,4 @@ PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
     return peer_info;
 }
 
-}
+} // namespace diameter::core::peer

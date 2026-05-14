@@ -11,11 +11,10 @@
 
 namespace diameter::core::io {
 
-class Acceptor final
-    : public std::enable_shared_from_this<Acceptor>
+class Acceptor final : public std::enable_shared_from_this<Acceptor>
 {
 public:
-    using ProtocolType = boost::asio::ip::tcp; //move to template
+    using ProtocolType = boost::asio::ip::tcp; // move to template
     using SelfPtr = std::shared_ptr<Acceptor>;
     using AcceptorType = ProtocolType::acceptor;
     using SocketType = ProtocolType::socket;
@@ -114,7 +113,7 @@ private:
         ResolverQueryType query(m_src_address.host[0],
             std::to_string(static_cast<unsigned int>(m_src_address.port)));
 
-        DIAMETER_LOG_DEBUG("Resolving "<< m_src_address.host[0] << ":" << m_src_address.port);
+        DIAMETER_LOG_DEBUG("Resolving " << m_src_address.host[0] << ":" << m_src_address.port);
         m_resolver.async_resolve(query, [self(shared_from_this())](auto&&... args) {
             self->on_resolve_handler(std::forward<decltype(args)>(args)...);
         });
@@ -127,7 +126,7 @@ private:
         }
 
         if (error) {
-            DIAMETER_LOG_ERROR("Resolve failed: "<< error.message());
+            DIAMETER_LOG_ERROR("Resolve failed: " << error.message());
             call_on_start_cb(error, EndpointType {});
             stop();
             return;
@@ -167,7 +166,7 @@ private:
             return;
         }
 
-        m_acceptor.async_accept([self(shared_from_this())](auto &&...args){
+        m_acceptor.async_accept([self(shared_from_this())](auto&&... args) {
             self->on_accept_handler(std::forward<decltype(args)>(args)...);
         });
     }
