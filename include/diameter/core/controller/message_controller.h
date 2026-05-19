@@ -138,6 +138,29 @@ public:
         return true;
     }
 
+    void handle_peer_disconnect(const std::string& peer_name)
+    {
+        std::lock_guard lock(m_mutex);
+
+        auto peer_it = m_peer_messages.find(peer_name);
+        if (peer_it == m_peer_messages.end()) {
+            return;
+        }
+
+        auto& messages = peer_it->second;
+        for (auto it = messages.begin(); it != messages.end();) {
+            it->second.timer->cancel();
+            if (it->second.handler) {
+                boost::asio::post(m_ioc,
+                    [handler = std::move(it->second.handler)]() mutable {
+                        handler(core::Error::NetworkError, nullptr);
+                    });
+            }
+            it = messages.erase(it);
+        }
+        m_peer_messages.erase(peer_it);
+    }
+
 private:
     MessageId make_message_id(const MessagePtr& message)
     {
