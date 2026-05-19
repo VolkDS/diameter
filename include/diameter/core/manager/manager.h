@@ -149,20 +149,26 @@ public:
         }
     }
 
-    peer::IPeer* get_peer(const std::string& peer_name)
+    // peer::IPeer* get_peer(const std::string& peer_name)
+    // {
+    // }
+
+    void set_on_recv_message_cb(OnRecvMessageCb&& handler)
     {
+        std::unique_lock lock(m_mutex);
+        m_on_recv_message_cb = std::move(handler);
     }
 
-    void set_on_recv_message_cb(OnRecvMessageCb&& callback)
+    void set_on_peer_open_state_cb(OnPeerStateCb&& handler)
     {
+        std::unique_lock lock(m_mutex);
+        m_on_peer_open_state_cb = std::move(handler);
     }
 
-    void set_on_peer_open_state_cb(OnPeerStateCb&& callback)
+    void set_on_peer_closed_state_cb(OnPeerStateCb&& handler)
     {
-    }
-
-    void set_on_peer_closed_state_cb(OnPeerStateCb&& callback)
-    {
+        std::unique_lock lock(m_mutex);
+        m_on_peer_closed_state_cb = std::move(handler);
     }
 
 private:
@@ -360,7 +366,7 @@ private:
             return;
 
         DIAMETER_LOG_DEBUG("[peer=" << peer_ptr->name() << "] CLOSED");
-
+        m_message_controller.handle_peer_disconnect(peer_ptr->name());
         // TODO: Run reconnect timer
     }
 
@@ -514,12 +520,14 @@ private:
             return nullptr;
 
         std::shared_lock lock(m_mutex);
+        auto peer_config_opt = m_config.get_peer_config(peer_ptr->name());
         auto local_peer_opt = m_config.get_local_peer_config_by_peer(peer_ptr->name());
         lock.unlock();
 
-        if (!local_peer_opt.has_value())
+        if (!local_peer_opt.has_value() || !peer_config_opt.has_value())
             return nullptr;
         auto& local_peer_config = local_peer_opt.value();
+        auto& peer_config = peer_config_opt.value();
 
         auto builder = application::common::DeviceWatchdogBuilder();
         builder.set_hop_by_hop(m_ids_generator.next_hop_by_hop())
@@ -527,11 +535,39 @@ private:
             .add_origin_host(local_peer_config.info.origin_host)
             .add_origin_realm(local_peer_config.info.origin_realm);
 
-        return builder.build();
+        peer::Peer::MessagePtr DWR_message = builder.build();
+        m_message_controller.push_request(DWR_message, peer_ptr->name(),
+            peer_config.request_timeout);
+        return DWR_message;
     }
 
     peer::Peer::MessagePtr on_generate_DPR_handler(peer::Peer::SelfWPtr peer_wptr)
     {
+        auto peer_ptr = peer_wptr.lock();
+        if (!peer_ptr)
+            return nullptr;
+
+        std::shared_lock lock(m_mutex);
+        auto peer_config_opt = m_config.get_peer_config(peer_ptr->name());
+        auto local_peer_opt = m_config.get_local_peer_config_by_peer(peer_ptr->name());
+        lock.unlock();
+
+        if (!local_peer_opt.has_value() || !peer_config_opt.has_value())
+            return nullptr;
+        auto& local_peer_config = local_peer_opt.value();
+        auto& peer_config = peer_config_opt.value();
+
+        auto builder = application::common::DisconnectPeerBuilder();
+        builder.set_hop_by_hop(m_ids_generator.next_hop_by_hop())
+            .set_end_to_end(m_ids_generator.next_end_to_end())
+            .add_origin_host(local_peer_config.info.origin_host)
+            .add_origin_realm(local_peer_config.info.origin_realm)
+            .add_disconnect_cause(0); // REBOOTING
+
+        peer::Peer::MessagePtr DPR_message = builder.build();
+        m_message_controller.push_request(DPR_message, peer_ptr->name(),
+            peer_config.request_timeout);
+        return DPR_message;
     }
 
 private:
@@ -549,9 +585,9 @@ private:
 
     std::shared_mutex m_mutex;
 
-    OnRecvMessageCb m_on_recv_message_callback;
-    OnPeerStateCb m_on_peer_open_state_callback;
-    OnPeerStateCb m_on_peer_closed_state_callback;
+    OnRecvMessageCb m_on_recv_message_cb;
+    OnPeerStateCb m_on_peer_open_state_cb;
+    OnPeerStateCb m_on_peer_closed_state_cb;
 };
 
 } // namespace diameter::core::manager
