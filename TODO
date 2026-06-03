@@ -1,0 +1,4 @@
+# TODO
+
+- In the `diameter::core::io::Connector` class, replace `start_timer()` with a call to `call_on_connect_cb(error)` because otherwise the `Events::I_RCV_CONN_NACK` event in the `diameter::core::peer::Peer` class does not work.
+- In the `diameter::core::io::Connector` class, fix the `stop()` function. It appears that it does not work at all.
