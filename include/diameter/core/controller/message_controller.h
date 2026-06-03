@@ -97,7 +97,7 @@ public:
         return true;
     }
 
-    bool handle_response(MessagePtr&& answer, const std::string& peer_name)
+    bool handle_response_with_cb(MessagePtr&& answer, const std::string& peer_name)
     {
         if (!answer) {
             return false;
@@ -135,6 +135,37 @@ public:
                     handler(core::Error::Success, std::move(answer));
                 });
         }
+        return true;
+    }
+
+    bool handle_response_without_cb(const MessagePtr& answer, const std::string& peer_name)
+    {
+        if (!answer) {
+            return false;
+        }
+
+        auto msg_id = make_message_id(answer);
+
+        std::lock_guard lock(m_mutex);
+
+        auto peer_it = m_peer_messages.find(peer_name);
+        if (peer_it == m_peer_messages.end()) {
+            return false;
+        }
+
+        auto& messages = peer_it->second;
+        auto it = messages.find(msg_id);
+        if (it == messages.end()) {
+            return false;
+        }
+
+        it->second.timer->cancel();
+
+        messages.erase(it);
+        if (messages.empty()) {
+            m_peer_messages.erase(peer_it);
+        }
+
         return true;
     }
 

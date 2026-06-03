@@ -52,7 +52,8 @@ public:
     struct Callbacks
     {
         using OnRecvMessageCb = std::function<void(MessagePtr&&)>;
-        using OnRecvCommonMessageCb = std::function<MessagePtr(const MessagePtr&)>;
+        using OnRecvCommonRequestCb = std::function<MessagePtr(const MessagePtr&)>;
+        using OnRecvCommonAnswerCb = std::function<bool(const MessagePtr&)>;
         using OnGenerateMessageCb = std::function<MessagePtr()>;
         // The stable states that a state machine may be in are Closed, I-Open, and R-Open
         using OnStableStateCb = std::function<void()>;
@@ -63,12 +64,12 @@ public:
         OnGenerateMessageCb on_generate_CER_cb;
         OnGenerateMessageCb on_generate_DWR_cb;
         OnGenerateMessageCb on_generate_DPR_cb;
-        OnRecvCommonMessageCb on_recv_CER_cb;
-        OnRecvMessageCb on_recv_CEA_cb;
-        OnRecvCommonMessageCb on_recv_DWR_cb;
-        OnRecvMessageCb on_recv_DWA_cb;
-        OnRecvCommonMessageCb on_recv_DPR_cb;
-        OnRecvMessageCb on_recv_DPA_cb;
+        OnRecvCommonRequestCb on_recv_CER_cb;
+        OnRecvCommonAnswerCb on_recv_CEA_cb;
+        OnRecvCommonRequestCb on_recv_DWR_cb;
+        OnRecvCommonAnswerCb on_recv_DWA_cb;
+        OnRecvCommonRequestCb on_recv_DPR_cb;
+        OnRecvCommonAnswerCb on_recv_DPA_cb;
     };
 
     using FsmUserDataType
@@ -266,37 +267,37 @@ public:
         m_callbacks.on_recv_message_cb = std::move(handler);
     }
 
-    void set_on_recv_CER_cb(Callbacks::OnRecvCommonMessageCb&& handler)
+    void set_on_recv_CER_cb(Callbacks::OnRecvCommonRequestCb&& handler)
     {
         std::unique_lock lock(m_callback_mutex);
         m_callbacks.on_recv_CER_cb = std::move(handler);
     }
 
-    void set_on_recv_CEA_cb(Callbacks::OnRecvMessageCb&& handler)
+    void set_on_recv_CEA_cb(Callbacks::OnRecvCommonAnswerCb&& handler)
     {
         std::unique_lock lock(m_callback_mutex);
         m_callbacks.on_recv_CEA_cb = std::move(handler);
     }
 
-    void set_on_recv_DWR_cb(Callbacks::OnRecvCommonMessageCb&& handler)
+    void set_on_recv_DWR_cb(Callbacks::OnRecvCommonRequestCb&& handler)
     {
         std::unique_lock lock(m_callback_mutex);
         m_callbacks.on_recv_DWR_cb = std::move(handler);
     }
 
-    void set_on_recv_DWA_cb(Callbacks::OnRecvMessageCb&& handler)
+    void set_on_recv_DWA_cb(Callbacks::OnRecvCommonAnswerCb&& handler)
     {
         std::unique_lock lock(m_callback_mutex);
         m_callbacks.on_recv_DWA_cb = std::move(handler);
     }
 
-    void set_on_recv_DPR_cb(Callbacks::OnRecvCommonMessageCb&& handler)
+    void set_on_recv_DPR_cb(Callbacks::OnRecvCommonRequestCb&& handler)
     {
         std::unique_lock lock(m_callback_mutex);
         m_callbacks.on_recv_DPR_cb = std::move(handler);
     }
 
-    void set_on_recv_DPA_cb(Callbacks::OnRecvMessageCb&& handler)
+    void set_on_recv_DPA_cb(Callbacks::OnRecvCommonAnswerCb&& handler)
     {
         std::unique_lock lock(m_callback_mutex);
         m_callbacks.on_recv_DPA_cb = std::move(handler);
@@ -409,11 +410,25 @@ private:
                 else {
                     switch (message->header.command_code) {
                         case application::common::CommandV::DeviceWatchdog:
-                            self->process_fsm_event(Events::R_RCV_DWA, std::move(message));
-                            break;
+                            {
+                                std::shared_lock lock(self->m_callback_mutex);
+                                if (self->m_callbacks.on_recv_DWA_cb) {
+                                    if (self->m_callbacks.on_recv_DWA_cb(message)) {
+                                        self->process_fsm_event(Events::R_RCV_DWA, std::move(message));
+                                    }
+                                }
+                                break;
+                            }
                         case application::common::CommandV::DisconnectPeer:
-                            self->process_fsm_event(Events::R_RCV_DPA, std::move(message));
-                            break;
+                            {
+                                std::shared_lock lock(self->m_callback_mutex);
+                                if (self->m_callbacks.on_recv_DPA_cb) {
+                                    if (self->m_callbacks.on_recv_DPA_cb(message)) {
+                                        self->process_fsm_event(Events::R_RCV_DPA, std::move(message));
+                                    }
+                                }
+                                break;
+                            }
                         default:
                             break;
                     }
@@ -462,14 +477,35 @@ private:
                 else {
                     switch (message->header.command_code) {
                         case application::common::CommandV::CapabilitiesExchange:
-                            self->process_fsm_event(Events::I_RCV_CEA, std::move(message));
-                            break;
+                            {
+                                std::shared_lock lock(self->m_callback_mutex);
+                                if (self->m_callbacks.on_recv_CEA_cb) {
+                                    if (self->m_callbacks.on_recv_CEA_cb(message)) {
+                                        self->process_fsm_event(Events::I_RCV_CEA, std::move(message));
+                                    }
+                                }
+                                break;
+                            }
                         case application::common::CommandV::DeviceWatchdog:
-                            self->process_fsm_event(Events::I_RCV_DWA, std::move(message));
-                            break;
+                            {
+                                std::shared_lock lock(self->m_callback_mutex);
+                                if (self->m_callbacks.on_recv_DWA_cb) {
+                                    if (self->m_callbacks.on_recv_DWA_cb(message)) {
+                                        self->process_fsm_event(Events::I_RCV_DWA, std::move(message));
+                                    }
+                                }
+                                break;
+                            }
                         case application::common::CommandV::DisconnectPeer:
-                            self->process_fsm_event(Events::I_RCV_DPA, std::move(message));
-                            break;
+                            {
+                                std::shared_lock lock(self->m_callback_mutex);
+                                if (self->m_callbacks.on_recv_DWA_cb) {
+                                    if (self->m_callbacks.on_recv_DWA_cb(message)) {
+                                        self->process_fsm_event(Events::I_RCV_DPA, std::move(message));
+                                    }
+                                }
+                                break;
+                            }
                         default:
                             break;
                     }
@@ -618,11 +654,6 @@ private:
 
         // TODO: Maybe save it?
         PeerInfo peer_info = make_peer_info(CEA_message);
-
-        std::shared_lock lock(m_callback_mutex);
-        if (m_callbacks.on_recv_CEA_cb) {
-            m_callbacks.on_recv_CEA_cb(std::move(CEA_message));
-        }
     }
 
     // The DWR/DWA message is serviced.

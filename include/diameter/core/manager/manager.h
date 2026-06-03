@@ -216,6 +216,14 @@ private:
             return on_recv_CEA_handler(wpeer, std::forward<decltype(args)>(args)...);
         });
 
+        peer->set_on_recv_DWA_cb([this, wpeer](auto&&... args) {
+            return on_recv_DWA_handler(wpeer, std::forward<decltype(args)>(args)...);
+        });
+
+        peer->set_on_recv_DPA_cb([this, wpeer](auto&&... args) {
+            return on_recv_DPA_handler(wpeer, std::forward<decltype(args)>(args)...);
+        });
+
         peer->set_on_generate_CER_cb([this, wpeer](auto&&... args) {
             return on_generate_CER_handler(wpeer, std::forward<decltype(args)>(args)...);
         });
@@ -445,13 +453,31 @@ private:
         return builder.build();
     }
 
-    void on_recv_CEA_handler(peer::Peer::SelfWPtr peer_wptr, peer::Peer::MessagePtr&& CEA_message)
+    bool on_recv_CEA_handler(peer::Peer::SelfWPtr peer_wptr, const peer::Peer::MessagePtr& CEA_message)
     {
         auto peer_ptr = peer_wptr.lock();
         if (!peer_ptr)
-            return;
+            return false;
 
-        m_message_controller.handle_response(std::move(CEA_message), peer_ptr->name());
+        return m_message_controller.handle_response_without_cb(CEA_message, peer_ptr->name());
+    }
+
+    bool on_recv_DWA_handler(peer::Peer::SelfWPtr peer_wptr, const peer::Peer::MessagePtr& DWA_message)
+    {
+        auto peer_ptr = peer_wptr.lock();
+        if (!peer_ptr)
+            return false;
+
+        return m_message_controller.handle_response_without_cb(DWA_message, peer_ptr->name());
+    }
+
+    bool on_recv_DPA_handler(peer::Peer::SelfWPtr peer_wptr, const peer::Peer::MessagePtr& DPA_message)
+    {
+        auto peer_ptr = peer_wptr.lock();
+        if (!peer_ptr)
+            return false;
+
+        return m_message_controller.handle_response_without_cb(DPA_message, peer_ptr->name());
     }
 
     peer::Peer::MessagePtr on_generate_CER_handler(peer::Peer::SelfWPtr peer_wptr)
