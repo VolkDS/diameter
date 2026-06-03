@@ -73,7 +73,7 @@ public:
         });
     }
 
-    void recv_message(const std::shared_ptr<message::Message>& message)
+    void recv_message(const std::shared_ptr<message::Message>& /*message*/)
     {
 
     }
@@ -110,12 +110,12 @@ private:
         }
     }
 
-    void throwaway(FsmUserDataType&& ud)
+    void throwaway(FsmUserDataType&& /*ud*/)
     {
 
     }
 
-    void open(FsmUserDataType&& ud)
+    void open(FsmUserDataType&& /*ud*/)
     {
 
     }

@@ -111,7 +111,7 @@ private:
         }
     }
 
-    void on_disconnect(ConnectionId conn_id, const boost::system::error_code& error)
+    void on_disconnect(ConnectionId conn_id, const boost::system::error_code& /*error*/)
     {
         std::lock_guard lock(m_mutex);
         auto it = m_waiting_connections.find(conn_id);

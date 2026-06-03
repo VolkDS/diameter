@@ -350,7 +350,7 @@ private:
         peer_ptr->timeout();
     }
 
-    void on_recv_message_handler(peer::Peer::SelfWPtr peer_wptr, peer::Peer::MessagePtr&& message)
+    void on_recv_message_handler(peer::Peer::SelfWPtr peer_wptr, peer::Peer::MessagePtr&& /*message*/)
     {
         auto peer_ptr = peer_wptr.lock();
         if (!peer_ptr)

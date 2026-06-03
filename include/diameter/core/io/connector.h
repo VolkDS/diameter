@@ -42,7 +42,7 @@ public:
 
     void run()
     {
-        if (m_running.exchange(true)) {
+        if (m_running.exchange(false)) {
             return;
         }
 
@@ -57,6 +57,10 @@ public:
     void stop()
     {
         if (!m_running.exchange(false)) {
+            return;
+        }
+
+        if (m_stopped.exchange(true)) {
             return;
         }
     }
