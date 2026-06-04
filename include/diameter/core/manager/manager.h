@@ -204,6 +204,10 @@ private:
             return on_closed_state_handler(wpeer);
         });
 
+        peer->set_on_win_election_cb([this, wpeer]() {
+            return on_win_election_handler(wpeer);
+        });
+
         peer->set_on_recv_message_cb([this, wpeer](auto&&... args) {
             return on_recv_message_handler(wpeer, std::forward<decltype(args)>(args)...);
         });
@@ -376,6 +380,16 @@ private:
         DIAMETER_LOG_DEBUG("[peer=" << peer_ptr->name() << "] CLOSED");
         m_message_controller.handle_peer_disconnect(peer_ptr->name());
         // TODO: Run reconnect timer
+    }
+
+    void on_win_election_handler(peer::Peer::SelfWPtr peer_wptr)
+    {
+        boost::asio::post(m_ioc, [peer_wptr]() mutable {
+            auto peer_ptr = peer_wptr.lock();
+            if (!peer_ptr)
+                return;
+            peer_ptr->win_election();
+        });
     }
 
     // <CEA> ::= < Diameter Header: 257 >

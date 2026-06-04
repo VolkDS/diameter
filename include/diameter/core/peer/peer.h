@@ -61,6 +61,7 @@ public:
 
         OnStableStateCb on_open_state_cb;
         OnStableStateCb on_closed_state_cb;
+        OnStableStateCb on_win_election_cb;
         OnRecvMessageCb on_recv_message_cb;
         OnGenerateMessageCb on_generate_CER_cb;
         OnGenerateMessageCb on_generate_DWR_cb;
@@ -262,6 +263,10 @@ public:
         }
     }
 
+    void win_election() {
+        process_fsm_event(Events::WIN_ELECTION);
+    }
+
     void set_on_recv_message_cb(Callbacks::OnRecvMessageCb&& handler)
     {
         std::unique_lock lock(m_callback_mutex);
@@ -314,6 +319,12 @@ public:
     {
         std::unique_lock lock(m_callback_mutex);
         m_callbacks.on_closed_state_cb = std::move(handler);
+    }
+
+    void set_on_win_election_cb(Callbacks::OnStableStateCb&& handler)
+    {
+        std::unique_lock lock(m_callback_mutex);
+        m_callbacks.on_win_election_cb = std::move(handler);
     }
 
     void set_on_generate_CER_cb(Callbacks::OnGenerateMessageCb&& handler)
@@ -503,8 +514,8 @@ private:
                         case application::common::CommandV::DisconnectPeer:
                             {
                                 std::shared_lock lock(self->m_callback_mutex);
-                                if (self->m_callbacks.on_recv_DWA_cb) {
-                                    if (self->m_callbacks.on_recv_DWA_cb(message)) {
+                                if (self->m_callbacks.on_recv_DPA_cb) {
+                                    if (self->m_callbacks.on_recv_DPA_cb(message)) {
                                         self->process_fsm_event(Events::I_RCV_DPA, std::move(message));
                                     }
                                 }
@@ -593,8 +604,7 @@ private:
             });
 
         if (is_win) {
-            // TODO: Important! This call should be after the end off prev action
-            process_fsm_event(Events::WIN_ELECTION);
+            m_callbacks.on_win_election_cb();
         }
     }
 
@@ -709,8 +719,8 @@ private:
         MessagePtr DPA_message;
         {
             std::shared_lock lock(m_callback_mutex);
-            if (m_callbacks.on_recv_DWR_cb) {
-                DPA_message = m_callbacks.on_recv_DWR_cb(std::move(DPR_message));
+            if (m_callbacks.on_recv_DPR_cb) {
+                DPA_message = m_callbacks.on_recv_DPR_cb(std::move(DPR_message));
             }
             else {
                 auto DPA_builder = application::common::DisconnectPeerBuilder();
@@ -775,8 +785,8 @@ private:
         MessagePtr DPR_message;
         {
             std::shared_lock lock(m_callback_mutex);
-            if (m_callbacks.on_generate_CER_cb) {
-                DPR_message = m_callbacks.on_generate_CER_cb();
+            if (m_callbacks.on_generate_DPR_cb) {
+                DPR_message = m_callbacks.on_generate_DPR_cb();
             }
         }
         m_responder->send_message(DPR_message);
