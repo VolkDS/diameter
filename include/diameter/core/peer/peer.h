@@ -705,11 +705,6 @@ private:
     void process_DWA(FsmUserDataType&& ud)
     {
         auto DWA_message = std::get<MessagePtr>(std::move(ud));
-
-        std::shared_lock lock(m_callback_mutex);
-        if (m_callbacks.on_recv_DWA_cb) {
-            m_callbacks.on_recv_DWA_cb(std::move(DWA_message));
-        }
     }
 
     void process_DPR(FsmUserDataType&& ud)
