@@ -42,7 +42,7 @@ public:
 
     void run()
     {
-        if (m_running.exchange(false)) {
+        if (m_running.exchange(true)) {
             return;
         }
 
