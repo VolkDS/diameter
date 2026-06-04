@@ -2,6 +2,7 @@
 #define DIAMETER_CORE_PEER_PEER_H
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <variant>
 
@@ -354,6 +355,9 @@ private:
 
     bool process_fsm_event(const Events& event, FsmUserDataType&& ud)
     {
+        // Only one event at one moment
+        // If it will be slow...
+        std::lock_guard<std::mutex> lock(m_fsm_mutex);
         DIAMETER_LOG_DEBUG("[peer=" << m_name << "] Event " << event << " in state "
                                     << m_fsm.state());
         bool processed = m_fsm.process_event(event, std::forward<FsmUserDataType>(ud));
@@ -808,6 +812,7 @@ private:
     IdentityType m_remote_realm;
     IdentityType m_full_id;
 
+    std::mutex m_fsm_mutex;
     FsmType m_fsm;
 
     ConnectorPtr m_connector;
