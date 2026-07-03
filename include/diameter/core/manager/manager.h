@@ -263,11 +263,13 @@ private:
         std::string dst_host = socket.remote_endpoint(ignore_error).address().to_string();
         uint16_t dst_port = socket.remote_endpoint(ignore_error).port();
 
+        // clang-format off
         DIAMETER_LOG_DEBUG("Incomming connect "
             << src_host << ":" << src_port
             << " <- "
             << dst_host << ":" << dst_port
         );
+        // clang-format on
 
         auto connection = io::Connection::create(std::move(socket));
 
@@ -315,7 +317,7 @@ private:
             auto peer = it->second;
 
             if (peer->full_id() == full_name) {
-                auto incoming_data = peer::Peer::IncomingData {
+                auto incoming_data = peer::Peer::IncomingData{
                     std::move(connection), std::move(CER_message), std::move(remote_peer_info)};
                 peer->responder_connection_CER(std::move(incoming_data));
                 return;
@@ -354,7 +356,8 @@ private:
         peer_ptr->timeout();
     }
 
-    void on_recv_message_handler(peer::Peer::SelfWPtr peer_wptr, peer::Peer::MessagePtr&& /*message*/)
+    void on_recv_message_handler(peer::Peer::SelfWPtr peer_wptr,
+        peer::Peer::MessagePtr&& /*message*/)
     {
         auto peer_ptr = peer_wptr.lock();
         if (!peer_ptr)
@@ -467,7 +470,8 @@ private:
         return builder.build();
     }
 
-    bool on_recv_CEA_handler(peer::Peer::SelfWPtr peer_wptr, const peer::Peer::MessagePtr& CEA_message)
+    bool on_recv_CEA_handler(peer::Peer::SelfWPtr peer_wptr,
+        const peer::Peer::MessagePtr& CEA_message)
     {
         auto peer_ptr = peer_wptr.lock();
         if (!peer_ptr)
@@ -476,7 +480,8 @@ private:
         return m_message_controller.handle_response_without_cb(CEA_message, peer_ptr->name());
     }
 
-    bool on_recv_DWA_handler(peer::Peer::SelfWPtr peer_wptr, const peer::Peer::MessagePtr& DWA_message)
+    bool on_recv_DWA_handler(peer::Peer::SelfWPtr peer_wptr,
+        const peer::Peer::MessagePtr& DWA_message)
     {
         auto peer_ptr = peer_wptr.lock();
         if (!peer_ptr)
@@ -485,7 +490,8 @@ private:
         return m_message_controller.handle_response_without_cb(DWA_message, peer_ptr->name());
     }
 
-    bool on_recv_DPA_handler(peer::Peer::SelfWPtr peer_wptr, const peer::Peer::MessagePtr& DPA_message)
+    bool on_recv_DPA_handler(peer::Peer::SelfWPtr peer_wptr,
+        const peer::Peer::MessagePtr& DPA_message)
     {
         auto peer_ptr = peer_wptr.lock();
         if (!peer_ptr)

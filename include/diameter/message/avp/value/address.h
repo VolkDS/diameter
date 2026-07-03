@@ -165,7 +165,7 @@ private:
     address_family_type m_address_family;
     value_type m_value;
 
-    bool m_is_validated {false};
+    bool m_is_validated{false};
     address_string_type m_address_string;
 };
 

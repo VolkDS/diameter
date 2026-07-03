@@ -7,6 +7,7 @@
 
 namespace diameter::message {
 
+// clang-format off
 template<typename T>
 using is_diameter_message = 
     typename std::enable_if_t<std::is_same_v<T, Message>, bool>;
@@ -34,7 +35,7 @@ using is_diameter_message_header =
 template<typename T>
 using is_diameter_message_header_command_flags =
     typename std::enable_if_t<std::is_same_v<T, header::CommandFlags>, bool>;
-
+// clang-format on
 }
 
 #endif /* DIAMETER_MESSAGE_TYPE_TRAITS_H */

@@ -101,7 +101,7 @@ public:
 private:
     value_type m_value;
 
-    bool m_is_validated {false};
+    bool m_is_validated{false};
     action_type m_action;
     direction_type m_direction;
     protocol_type m_protocol;

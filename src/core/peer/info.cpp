@@ -39,13 +39,13 @@ namespace diameter::core::peer {
 PeerInfo make_peer_info(const std::shared_ptr<message::Message>& message)
 {
     if (message->header.application_id != message::header::ApplicationV::Common) {
-        return PeerInfo {};
+        return PeerInfo{};
     }
     if (message->header.command_code != application::common::CommandV::CapabilitiesExchange) {
-        return PeerInfo {};
+        return PeerInfo{};
     }
 
-    auto peer_info = PeerInfo {};
+    auto peer_info = PeerInfo{};
     for (const auto& avp : message->avps) {
         // Origin-Host
         if (avp.code == application::common::AvpCodeV::OriginHost) {

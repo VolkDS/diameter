@@ -27,6 +27,7 @@ BOOST_AUTO_TEST_CASE(default_constructor)
 
 BOOST_AUTO_TEST_CASE(field_initialization)
 {
+    // clang-format off
     Message m {
         {
             header::ProtocolVersion{1},
@@ -42,6 +43,7 @@ BOOST_AUTO_TEST_CASE(field_initialization)
             avp::AVP{1001, avp::Flags{avp::Flag::Mandatory}, std::nullopt, avp::Integer64(1)}
         }
     };
+    // clang-format on
 
     BOOST_CHECK_EQUAL(m.header.version, header::ProtocolVersion{1});
     BOOST_CHECK_EQUAL(m.header.length, header::MessageLength{0});
@@ -58,6 +60,7 @@ BOOST_AUTO_TEST_CASE(field_initialization)
 
 BOOST_AUTO_TEST_CASE(move_constructor)
 {
+    // clang-format off
     Message m1 {
         {
             header::ProtocolVersion{1},
@@ -73,8 +76,9 @@ BOOST_AUTO_TEST_CASE(move_constructor)
             avp::AVP{1001, avp::Flags{avp::Flag::Mandatory}, std::nullopt, avp::Integer64(1)}
         }
     };
+    // clang-format on
 
-    Message m2 {std::move(m1)};
+    Message m2{std::move(m1)};
     BOOST_CHECK_EQUAL(m2.header.version, header::ProtocolVersion{1});
     BOOST_CHECK_EQUAL(m2.header.length, header::MessageLength{0});
     BOOST_CHECK_EQUAL(m2.header.command_flags[header::CommandFlag::Request], true);
@@ -97,6 +101,7 @@ BOOST_AUTO_TEST_CASE(empty_size_calculation)
 
 BOOST_AUTO_TEST_CASE(full_size_calculation)
 {
+    // clang-format off
     Message m {
         {
             header::ProtocolVersion{header::ProtocolVersionV::V01},
@@ -117,6 +122,7 @@ BOOST_AUTO_TEST_CASE(full_size_calculation)
             avp::AVP{265, avp::Flags{avp::Flag::Mandatory}, std::nullopt, avp::Unsigned32(uint32_t{10415})}
         }
     };
+    // clang-format on
 
     BOOST_CHECK_EQUAL(m.size(), 192);
 }

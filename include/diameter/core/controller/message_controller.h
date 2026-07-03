@@ -17,10 +17,12 @@ class MessageController
 {
 public:
     using MessagePtr = std::shared_ptr<message::Message>;
+    // clang-format off
     using MessageId = std::pair<
         message::header::HopByHopIdentifier,
         message::header::EndToEndIdentifier
     >;
+    // clang-format on
 
     using Timer = boost::asio::steady_timer;
     using TimerPtr = std::shared_ptr<Timer>;
@@ -42,7 +44,7 @@ public:
     {
         size_t operator() (const MessageId& id) const
         {
-            return std::hash<uint64_t> {}((static_cast<uint64_t>(id.first) << 32) | id.second);
+            return std::hash<uint64_t>{}((static_cast<uint64_t>(id.first) << 32) | id.second);
         }
     };
 
@@ -79,7 +81,7 @@ public:
         }
 
         auto timer = std::make_shared<Timer>(m_ioc);
-        auto ctx = MessageContext {request, std::move(timer), std::move(handler)};
+        auto ctx = MessageContext{request, std::move(timer), std::move(handler)};
 
         auto msg_id = make_message_id(request);
         std::lock_guard lock(m_mutex);
@@ -182,10 +184,9 @@ public:
         for (auto it = messages.begin(); it != messages.end();) {
             it->second.timer->cancel();
             if (it->second.handler) {
-                boost::asio::post(m_ioc,
-                    [handler = std::move(it->second.handler)]() mutable {
-                        handler(core::Error::NetworkError, nullptr);
-                    });
+                boost::asio::post(m_ioc, [handler = std::move(it->second.handler)]() mutable {
+                    handler(core::Error::NetworkError, nullptr);
+                });
             }
             it = messages.erase(it);
         }

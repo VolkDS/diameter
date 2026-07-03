@@ -1,8 +1,8 @@
 #include <boost/test/unit_test.hpp>
 
+#include <diameter/application/common/common.h>
 #include <diameter/core/peer/info.h>
 #include <diameter/message/avp/vendor_id.h>
-#include <diameter/application/common/common.h>
 
 #include <list>
 
@@ -17,11 +17,11 @@ BOOST_AUTO_TEST_SUITE(peer_info_tests)
 
 BOOST_AUTO_TEST_CASE(default_constructor)
 {
-    PeerInfo peer_info {};
+    PeerInfo peer_info{};
 
     BOOST_CHECK_EQUAL(peer_info.origin_host, std::string());
     BOOST_CHECK_EQUAL(peer_info.origin_realm, std::string());
-    BOOST_CHECK_EQUAL(peer_info.vendor_id, diameter::message::avp::VendorId {});
+    BOOST_CHECK_EQUAL(peer_info.vendor_id, diameter::message::avp::VendorId{});
     BOOST_CHECK_EQUAL(peer_info.product_name, std::string());
 
     BOOST_CHECK_EQUAL(peer_info.inband_security_supported, false);
@@ -47,6 +47,7 @@ BOOST_AUTO_TEST_CASE(construct_from_message)
     //         * [ Vendor-Specific-Application-Id ]
     //           [ Firmware-Revision ]
     //         * [ AVP ]
+    // clang-format off
     dm::Message m {
         {
             dmh::ProtocolVersion{dmh::ProtocolVersionV::V01},
@@ -81,6 +82,7 @@ BOOST_AUTO_TEST_CASE(construct_from_message)
             })}
         }
     };
+    // clang-format on
 
     auto m_ptr = std::make_shared<dm::Message>(std::move(m));
     PeerInfo peer_info = make_peer_info(m_ptr);
@@ -92,30 +94,36 @@ BOOST_AUTO_TEST_CASE(construct_from_message)
 
     {
         auto expected_data = std::list<uint32_t>{2, 3, 4};
+        // clang-format off
         BOOST_CHECK_EQUAL_COLLECTIONS(
             peer_info.supported_vendor_ids.begin(),
             peer_info.supported_vendor_ids.end(),
             expected_data.begin(),
             expected_data.end()
         );
+        // clang-format on
     }
     {
         auto expected_data = std::list<uint32_t>{5, 6};
+        // clang-format off
         BOOST_CHECK_EQUAL_COLLECTIONS(
             peer_info.auth_application_ids.begin(),
             peer_info.auth_application_ids.end(),
             expected_data.begin(),
             expected_data.end()
         );
+        // clang-format on
     }
     {
         auto expected_data = std::list<uint32_t>{7, 8};
+        // clang-format off
         BOOST_CHECK_EQUAL_COLLECTIONS(
             peer_info.acct_application_ids.begin(),
             peer_info.acct_application_ids.end(),
             expected_data.begin(),
             expected_data.end()
         );
+        // clang-format on
     }
 }
 

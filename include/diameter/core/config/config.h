@@ -81,9 +81,9 @@ struct PeerConfig
     bool use_tls = false;
 
     // Timers
-    peer::IPeer::Duration reconnect_timeout = std::chrono::seconds {10};
-    peer::IPeer::Duration watchdog_timeout = std::chrono::seconds {30};
-    peer::IPeer::Duration request_timeout = std::chrono::seconds {1};
+    peer::IPeer::Duration reconnect_timeout = std::chrono::seconds{10};
+    peer::IPeer::Duration watchdog_timeout = std::chrono::seconds{30};
+    peer::IPeer::Duration request_timeout = std::chrono::seconds{1};
 };
 
 struct AcceptorConfig
@@ -98,7 +98,7 @@ struct AcceptorConfig
     bool use_tls = false;
 
     // Timers
-    peer::IPeer::Duration capability_timeout = std::chrono::seconds {5};
+    peer::IPeer::Duration capability_timeout = std::chrono::seconds{5};
 
     // Options
     bool allow_dynamic_peers = false;

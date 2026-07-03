@@ -28,7 +28,7 @@ class AvpOccursTooManyTimes : public Exception
 {
 public:
     explicit AvpOccursTooManyTimes(const std::string& message)
-        : what_message(message) {};
+        : what_message(message){};
 
     const char* what() const noexcept override
     {
@@ -43,7 +43,7 @@ class MissingAvp : public Exception
 {
 public:
     explicit MissingAvp(const std::string& message)
-        : what_message(message) {};
+        : what_message(message){};
 
     const char* what() const noexcept override
     {

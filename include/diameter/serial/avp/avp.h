@@ -34,20 +34,24 @@ To value_as(const message::avp::Value& value);
 
 namespace netpacker {
 
+// clang-format off
 template <typename T,
           typename InputIt,
           diameter::message::is_diameter_message_avp_value<T>* dummy = nullptr>
+// clang-format on
 T get(InputIt& possition, InputIt last, typename std::iterator_traits<InputIt>::difference_type len)
 {
     namespace dma = diameter::message::avp;
     auto raw_data = get<dma::OctetString::value_type>(possition, last, len);
     auto value = dma::OctetString(std::move(raw_data));
-    return T {std::move(value)};
+    return T{std::move(value)};
 }
 
+// clang-format off
 template <typename OutputIt,
             typename T,
             diameter::message::is_diameter_message_avp_value<T>* dummy = nullptr>
+// clang-format on
 OutputIt put(OutputIt possition, OutputIt last, const T& value)
 {
     namespace dma = diameter::message::avp;
@@ -56,9 +60,11 @@ OutputIt put(OutputIt possition, OutputIt last, const T& value)
     return put(possition, last, *octet_string_avp);
 }
 
+// clang-format off
 template <typename T,
           typename InputIt,
           diameter::message::is_diameter_message_avp_address<T>* dummy = nullptr>
+// clang-format on
 T get(InputIt& possition, InputIt last)
 {
     namespace dma = diameter::message::avp;
@@ -68,13 +74,14 @@ T get(InputIt& possition, InputIt last)
         = get<typename T::value_type::value_type>(possition, last, std::distance(possition, last));
 
     auto value = dma::Address(address_family, address_value);
-    return T {std::move(value)};
+    return T{std::move(value)};
 }
 
-
+// clang-format off
 template <typename OutputIt,
             typename T,
             diameter::message::is_diameter_message_avp<T>* dummy = nullptr>
+// clang-format on
 OutputIt put(OutputIt possition, OutputIt last, const T& value)
 {
     auto pos = put(possition, last, value.code);
@@ -93,9 +100,11 @@ OutputIt put(OutputIt possition, OutputIt last, const T& value)
     return pos;
 }
 
+// clang-format off
 template <typename T,
             typename InputIt,
             diameter::message::is_diameter_message_avp<T>* dummy = nullptr>
+// clang-format on
 T get(InputIt& possition, InputIt last)
 {
     T value;

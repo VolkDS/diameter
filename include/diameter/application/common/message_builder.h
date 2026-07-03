@@ -48,12 +48,14 @@ public:
 
     T& add_result_code(uint32_t value)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::ResultCode},
             message::avp::Flags{},
             std::nullopt,
             message::avp::Unsigned32(value)
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         message->header.command_flags.reset(message::header::CommandFlag::Request);
@@ -62,12 +64,14 @@ public:
 
     T& add_origin_host(const std::string& value)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::OriginHost},
             message::avp::Flags{},
             std::nullopt,
             message::avp::DiameterIdentity(value)
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         return static_cast<T&>(*this);
@@ -75,12 +79,14 @@ public:
 
     T& add_origin_realm(const std::string& value)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::OriginRealm},
             message::avp::Flags{},
             std::nullopt,
             message::avp::DiameterIdentity(value)
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         return static_cast<T&>(*this);
@@ -139,12 +145,14 @@ public:
 
     CapabilitiesExchangeBuilder& add_host_ip_address(const std::string& value)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::HostIPAddress},
             message::avp::Flags{},
             std::nullopt,
             message::avp::Address(value)
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         return *this;
@@ -152,12 +160,14 @@ public:
 
     CapabilitiesExchangeBuilder& add_vendor_id(uint32_t value)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::VendorId},
             message::avp::Flags{},
             std::nullopt,
             message::avp::Unsigned32(value)
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         return *this;
@@ -165,24 +175,28 @@ public:
 
     CapabilitiesExchangeBuilder& add_product_name(const std::string& value)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::ProductName},
             message::avp::Flags{},
             std::nullopt,
             message::avp::UTF8String(value)
         };
+        // clang-format on
         message->avps.push_back(std::move(avp));
         return *this;
     }
 
     CapabilitiesExchangeBuilder& add_supported_vendor_id(uint32_t value)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::SupportedVendorId},
             message::avp::Flags{},
             std::nullopt,
             message::avp::Unsigned32(value)
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         return *this;
@@ -190,12 +204,14 @@ public:
 
     CapabilitiesExchangeBuilder& add_auth_application_id(uint32_t value)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::AuthApplicationId},
             message::avp::Flags{},
             std::nullopt,
             message::avp::Unsigned32(value)
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         return *this;
@@ -203,12 +219,14 @@ public:
 
     CapabilitiesExchangeBuilder& add_acct_application_id(uint32_t value)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::AcctApplicationId},
             message::avp::Flags{},
             std::nullopt,
             message::avp::Unsigned32(value)
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         return *this;
@@ -216,12 +234,14 @@ public:
 
     CapabilitiesExchangeBuilder& add_inband_security_id(uint32_t value)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::InbandSecurityId},
             message::avp::Flags{},
             std::nullopt,
             message::avp::Unsigned32(value)
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         return *this;
@@ -230,6 +250,7 @@ public:
     CapabilitiesExchangeBuilder& add_vendor_specific_auth_application_id(uint32_t vendor_id,
         uint32_t application_id)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::VendorSpecificApplicationId},
             message::avp::Flags{},
@@ -249,6 +270,7 @@ public:
                 }
             })
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         return *this;
@@ -257,6 +279,7 @@ public:
     CapabilitiesExchangeBuilder& add_vendor_specific_acct_application_id(uint32_t vendor_id,
         uint32_t application_id)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::VendorSpecificApplicationId},
             message::avp::Flags{},
@@ -276,6 +299,7 @@ public:
                 }
             })
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         return *this;
@@ -333,12 +357,14 @@ public:
     DisconnectPeerBuilder& add_disconnect_cause(
         message::avp::Enumerated::value_type::value_type value)
     {
+        // clang-format off
         auto avp = message::avp::AVP {
             message::avp::Code{application::common::AvpCodeV::DisconnectCause},
             message::avp::Flags{},
             std::nullopt,
             message::avp::Enumerated(value)
         };
+        // clang-format on
         avp.flags.set(message::avp::Flag::Mandatory);
         message->avps.push_back(std::move(avp));
         return *this;

@@ -9,6 +9,7 @@
 namespace diameter::message::header {
 
 // see RFC6733 section 3, Command Flags
+// clang-format off
 enum class CommandFlag : uint8_t
 {
     Request       = 7,
@@ -16,6 +17,7 @@ enum class CommandFlag : uint8_t
     Error         = 5,
     Retransmitted = 4,
 };
+// clang-format on
 
 using CommandFlags = diameter::message::flags::Flags<CommandFlag, 8>;
 

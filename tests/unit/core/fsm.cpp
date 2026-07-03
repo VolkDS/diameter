@@ -21,10 +21,10 @@ enum TestState
 class TestContext
 {
 public:
-    void action1([[maybe_unused]] const int i = int {})
+    void action1([[maybe_unused]] const int i = int{})
     {
     }
-    void action2([[maybe_unused]] const int i = int {})
+    void action2([[maybe_unused]] const int i = int{})
     {
     }
 };

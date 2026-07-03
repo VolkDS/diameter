@@ -11,7 +11,7 @@ BOOST_AUTO_TEST_SUITE(avp_tests)
 BOOST_AUTO_TEST_CASE(default_constructor)
 {
     AVP a{};
-    
+
     BOOST_CHECK_EQUAL(a.code, Code{});
     BOOST_CHECK_EQUAL(a.flags[Flag::VendorSpecific], false);
     BOOST_CHECK_EQUAL(a.flags[Flag::Mandatory], false);
@@ -22,12 +22,14 @@ BOOST_AUTO_TEST_CASE(default_constructor)
 
 BOOST_AUTO_TEST_CASE(field_initialization)
 {
+    // clang-format off
     AVP a{
         Code{1000},
         Flags{Flag::VendorSpecific} | Flags{Flag::Mandatory},
         10415,
         Unsigned32(uint32_t{0})
     };
+    // clang-format on
 
     BOOST_CHECK_EQUAL(a.code, Code{1000});
     BOOST_CHECK_EQUAL(a.flags[Flag::VendorSpecific], true);

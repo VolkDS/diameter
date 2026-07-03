@@ -5,10 +5,7 @@
 
 namespace diameter::core {
 
-template <typename StateT,
-          typename EventT,
-          typename ContextT,
-          typename UserDataT>
+template<typename StateT, typename EventT, typename ContextT, typename UserDataT>
 class StateMachine
 {
 public:

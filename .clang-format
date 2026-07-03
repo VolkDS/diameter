@@ -119,7 +119,7 @@ IncludeCategories:
   - Regex:           '<linux/.*>'
     Priority:        2
   # Headers for external library
-  - Regex:           '<(curl|rapidjson)/.*>'
+  - Regex:           '<(curl|rapidjson|netpacker)/.*>'
     Priority:        4
   # Headers in <> with extension
   - Regex:           '<([A-Za-z0-9\-_/])+\.h.*>'
@@ -182,7 +182,7 @@ SpaceAfterLogicalNot: false
 SpaceAfterTemplateKeyword: false
 SpaceBeforeAssignmentOperators: true
 SpaceBeforeCaseColon: false
-SpaceBeforeCpp11BracedList: true
+SpaceBeforeCpp11BracedList: false
 SpaceBeforeCtorInitializerColon: true
 SpaceBeforeInheritanceColon: true
 SpaceBeforeParens: Custom

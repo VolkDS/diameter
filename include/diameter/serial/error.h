@@ -41,7 +41,7 @@ class InvalidAvpLength : public Exception
 {
 public:
     explicit InvalidAvpLength(const std::string& message)
-        : what_message(message) {};
+        : what_message(message){};
 
     const char* what() const noexcept override
     {
@@ -67,7 +67,7 @@ class InvalidAvpValueCast : public Exception
 {
 public:
     explicit InvalidAvpValueCast(const std::string& message)
-        : what_message(message) {};
+        : what_message(message){};
 
     const char* what() const noexcept override
     {

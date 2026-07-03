@@ -5,6 +5,7 @@
 
 namespace diameter::application::common {
 
+// clang-format off
 struct CommandV
 {
     enum Value : message::header::CommandCode
@@ -18,6 +19,7 @@ struct CommandV
         SessionTermination   = 275  // STR 8.4.1
     };
 };
+// clang-format on
 
 }
 

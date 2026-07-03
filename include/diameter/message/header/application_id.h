@@ -12,6 +12,7 @@ struct ApplicationV
 {
     // http://www.iana.org/assignments/aaa-parameters/aaa-parameters.xhtml
     // Application IDs
+    // clang-format off
     enum Value : ApplicationId
     {
         Common = 0,              // RFC6733 section 2.4
@@ -59,6 +60,7 @@ struct ApplicationV
 
         Relay = 0xffffffff       // RFC6733 section 2.4
     };
+    // clang-format on
 };
 
 } // namespace diameter::message::header

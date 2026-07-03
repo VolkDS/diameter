@@ -7,9 +7,11 @@
 
 using namespace diameter::message;
 
-static void BM_MessageSerial(benchmark::State& state) {
+static void BM_MessageSerial(benchmark::State& state)
+{
     for (auto _ : state) {
-        Message msg {
+        Message msg{
+  // clang-format off
             {
                 header::ProtocolVersion{header::ProtocolVersionV::V01},
                 header::MessageLength{0},
@@ -28,6 +30,7 @@ static void BM_MessageSerial(benchmark::State& state) {
                 avp::AVP{258, avp::Flags{avp::Flag::Mandatory}, std::nullopt, avp::Unsigned32(uint32_t{4})},
                 avp::AVP{265, avp::Flags{avp::Flag::Mandatory}, std::nullopt, avp::Unsigned32(uint32_t{10415})}
             }
+  // clang-format on
         };
 
         auto data = std::vector<uint8_t>(msg.size());

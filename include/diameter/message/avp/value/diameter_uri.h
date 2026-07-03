@@ -179,7 +179,7 @@ private:
 
     value_type m_value;
 
-    bool m_is_validated {false};
+    bool m_is_validated{false};
     scheme_type m_scheme;
     fqdn_type m_fqdn;
     port_type m_port;

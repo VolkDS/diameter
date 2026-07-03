@@ -263,7 +263,8 @@ public:
         }
     }
 
-    void win_election() {
+    void win_election()
+    {
         process_fsm_event(Events::WIN_ELECTION);
     }
 
@@ -424,26 +425,24 @@ private:
                 }
                 else {
                     switch (message->header.command_code) {
-                        case application::common::CommandV::DeviceWatchdog:
-                            {
-                                std::shared_lock lock(self->m_callback_mutex);
-                                if (self->m_callbacks.on_recv_DWA_cb) {
-                                    if (self->m_callbacks.on_recv_DWA_cb(message)) {
-                                        self->process_fsm_event(Events::R_RCV_DWA, std::move(message));
-                                    }
+                        case application::common::CommandV::DeviceWatchdog: {
+                            std::shared_lock lock(self->m_callback_mutex);
+                            if (self->m_callbacks.on_recv_DWA_cb) {
+                                if (self->m_callbacks.on_recv_DWA_cb(message)) {
+                                    self->process_fsm_event(Events::R_RCV_DWA, std::move(message));
                                 }
-                                break;
                             }
-                        case application::common::CommandV::DisconnectPeer:
-                            {
-                                std::shared_lock lock(self->m_callback_mutex);
-                                if (self->m_callbacks.on_recv_DPA_cb) {
-                                    if (self->m_callbacks.on_recv_DPA_cb(message)) {
-                                        self->process_fsm_event(Events::R_RCV_DPA, std::move(message));
-                                    }
+                            break;
+                        }
+                        case application::common::CommandV::DisconnectPeer: {
+                            std::shared_lock lock(self->m_callback_mutex);
+                            if (self->m_callbacks.on_recv_DPA_cb) {
+                                if (self->m_callbacks.on_recv_DPA_cb(message)) {
+                                    self->process_fsm_event(Events::R_RCV_DPA, std::move(message));
                                 }
-                                break;
                             }
+                            break;
+                        }
                         default:
                             break;
                     }
@@ -491,36 +490,33 @@ private:
                 }
                 else {
                     switch (message->header.command_code) {
-                        case application::common::CommandV::CapabilitiesExchange:
-                            {
-                                std::shared_lock lock(self->m_callback_mutex);
-                                if (self->m_callbacks.on_recv_CEA_cb) {
-                                    if (self->m_callbacks.on_recv_CEA_cb(message)) {
-                                        self->process_fsm_event(Events::I_RCV_CEA, std::move(message));
-                                    }
+                        case application::common::CommandV::CapabilitiesExchange: {
+                            std::shared_lock lock(self->m_callback_mutex);
+                            if (self->m_callbacks.on_recv_CEA_cb) {
+                                if (self->m_callbacks.on_recv_CEA_cb(message)) {
+                                    self->process_fsm_event(Events::I_RCV_CEA, std::move(message));
                                 }
-                                break;
                             }
-                        case application::common::CommandV::DeviceWatchdog:
-                            {
-                                std::shared_lock lock(self->m_callback_mutex);
-                                if (self->m_callbacks.on_recv_DWA_cb) {
-                                    if (self->m_callbacks.on_recv_DWA_cb(message)) {
-                                        self->process_fsm_event(Events::I_RCV_DWA, std::move(message));
-                                    }
+                            break;
+                        }
+                        case application::common::CommandV::DeviceWatchdog: {
+                            std::shared_lock lock(self->m_callback_mutex);
+                            if (self->m_callbacks.on_recv_DWA_cb) {
+                                if (self->m_callbacks.on_recv_DWA_cb(message)) {
+                                    self->process_fsm_event(Events::I_RCV_DWA, std::move(message));
                                 }
-                                break;
                             }
-                        case application::common::CommandV::DisconnectPeer:
-                            {
-                                std::shared_lock lock(self->m_callback_mutex);
-                                if (self->m_callbacks.on_recv_DPA_cb) {
-                                    if (self->m_callbacks.on_recv_DPA_cb(message)) {
-                                        self->process_fsm_event(Events::I_RCV_DPA, std::move(message));
-                                    }
+                            break;
+                        }
+                        case application::common::CommandV::DisconnectPeer: {
+                            std::shared_lock lock(self->m_callback_mutex);
+                            if (self->m_callbacks.on_recv_DPA_cb) {
+                                if (self->m_callbacks.on_recv_DPA_cb(message)) {
+                                    self->process_fsm_event(Events::I_RCV_DPA, std::move(message));
                                 }
-                                break;
                             }
+                            break;
+                        }
                         default:
                             break;
                     }
@@ -683,13 +679,12 @@ private:
             }
             else {
                 auto DWA_builder = application::common::DeviceWatchdogBuilder();
-                DWA_message = DWA_builder
-                    .set_hop_by_hop(DWR_message->header.hop_by_hop)
-                    .set_end_to_end(DWR_message->header.end_to_end)
-                    .add_result_code(application::common::ResultCodeV::SUCCESS)
-                    .add_origin_host(m_local_host)
-                    .add_origin_realm(m_local_realm)
-                    .build();
+                DWA_message = DWA_builder.set_hop_by_hop(DWR_message->header.hop_by_hop)
+                                  .set_end_to_end(DWR_message->header.end_to_end)
+                                  .add_result_code(application::common::ResultCodeV::SUCCESS)
+                                  .add_origin_host(m_local_host)
+                                  .add_origin_realm(m_local_realm)
+                                  .build();
             }
         }
 
@@ -719,13 +714,12 @@ private:
             }
             else {
                 auto DPA_builder = application::common::DisconnectPeerBuilder();
-                DPA_message = DPA_builder
-                    .set_hop_by_hop(DPR_message->header.hop_by_hop)
-                    .set_end_to_end(DPR_message->header.end_to_end)
-                    .add_result_code(application::common::ResultCodeV::SUCCESS)
-                    .add_origin_host(m_local_host)
-                    .add_origin_realm(m_local_realm)
-                    .build();
+                DPA_message = DPA_builder.set_hop_by_hop(DPR_message->header.hop_by_hop)
+                                  .set_end_to_end(DPR_message->header.end_to_end)
+                                  .add_result_code(application::common::ResultCodeV::SUCCESS)
+                                  .add_origin_host(m_local_host)
+                                  .add_origin_realm(m_local_realm)
+                                  .build();
             }
         }
 

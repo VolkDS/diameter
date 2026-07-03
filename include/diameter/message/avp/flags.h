@@ -9,12 +9,14 @@
 namespace diameter::message::avp {
 
 // see RFC6733
+// clang-format off
 enum class Flag : uint8_t
 {
     VendorSpecific = 7,
     Mandatory      = 6,
     Protected      = 5,
 };
+// clang-format on
 
 using Flags = diameter::message::flags::Flags<Flag, 8>;
 

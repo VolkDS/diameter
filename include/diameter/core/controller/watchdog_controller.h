@@ -50,7 +50,8 @@ public:
     };
 
     using FsmUserDataType = std::nullptr_t;
-    using FsmType = diameter::core::StateMachine<States, Events, WatchdogController, FsmUserDataType&&>;
+    using FsmType
+        = diameter::core::StateMachine<States, Events, WatchdogController, FsmUserDataType&&>;
     using FsmTransitionTableType = FsmType::transition_table_t;
     using FsmActionTableType = FsmType::action_table_t;
 
@@ -75,21 +76,17 @@ public:
 
     void recv_message(const std::shared_ptr<message::Message>& /*message*/)
     {
-
     }
 
     void on_connection_open()
     {
-
     }
 
     void on_connection_close()
     {
-        
     }
 
 private:
-
     bool process_fsm_event(const Events& event)
     {
         return process_fsm_event(event, nullptr);
@@ -97,9 +94,9 @@ private:
 
     bool process_fsm_event(const Events& event, FsmUserDataType&& ud)
     {
-        //DIAMETER_LOG_DEBUG("Event " << event << " in state " << m_fsm.state());
+        // DIAMETER_LOG_DEBUG("Event " << event << " in state " << m_fsm.state());
         bool processed = m_fsm.process_event(event, std::forward<FsmUserDataType>(ud));
-        //DIAMETER_LOG_DEBUG("New state " << m_fsm.state());
+        // DIAMETER_LOG_DEBUG("New state " << m_fsm.state());
         return processed;
     }
 
@@ -112,12 +109,10 @@ private:
 
     void throwaway(FsmUserDataType&& /*ud*/)
     {
-
     }
 
     void open(FsmUserDataType&& /*ud*/)
     {
-
     }
 
 private:
@@ -128,6 +123,6 @@ private:
     FsmType m_fsm;
 };
 
-}
+} // namespace diameter::core::controller
 
 #endif

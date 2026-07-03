@@ -66,7 +66,7 @@ public:
     void run()
     {
         if (m_running.exchange(true)) {
-            call_on_start_cb(boost::asio::error::already_started, EndpointType {});
+            call_on_start_cb(boost::asio::error::already_started, EndpointType{});
             return;
         }
         start_resolve();
@@ -127,14 +127,14 @@ private:
 
         if (error) {
             DIAMETER_LOG_ERROR("Resolve failed: " << error.message());
-            call_on_start_cb(error, EndpointType {});
+            call_on_start_cb(error, EndpointType{});
             stop();
             return;
         }
 
         if (iterator == ResolverType::iterator()) {
             DIAMETER_LOG_ERROR("Resolve failed: No data");
-            call_on_start_cb(boost::asio::error::no_data, EndpointType {});
+            call_on_start_cb(boost::asio::error::no_data, EndpointType{});
             stop();
             return;
         }
@@ -156,7 +156,7 @@ private:
 
         boost::system::error_code ignore;
         auto bind_ep = m_acceptor.local_endpoint(ignore);
-        call_on_start_cb(boost::system::error_code {}, bind_ep);
+        call_on_start_cb(boost::system::error_code{}, bind_ep);
         start_accept();
     }
 

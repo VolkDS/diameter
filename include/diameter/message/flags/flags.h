@@ -24,7 +24,7 @@ public:
     Flags& operator= (Flags&&) = default;
 
     Flags(UnderlyingT value)
-        : bits_ {value}
+        : bits_{value}
     {
     }
 
@@ -122,7 +122,7 @@ public:
 
 private:
     Flags(std::bitset<N> value)
-        : bits_ {value}
+        : bits_{value}
     {
     }
 

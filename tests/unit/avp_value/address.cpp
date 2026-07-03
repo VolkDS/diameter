@@ -25,7 +25,8 @@ BOOST_AUTO_TEST_CASE(constructor)
     BOOST_CHECK_EQUAL(value2->address_family(), message::avp::value::AddressFamilyV::IPv4);
 
     // Test case 3: IPv6 address
-    auto value3 = message::avp::Address(message::avp::value::AddressFamilyV::IPv6, "2001:db8:3c4d:7777:260:3eff:fe15:9501");
+    auto value3 = message::avp::Address(message::avp::value::AddressFamilyV::IPv6,
+        "2001:db8:3c4d:7777:260:3eff:fe15:9501");
     BOOST_CHECK_EQUAL(value3->address_string(), "2001:db8:3c4d:7777:260:3eff:fe15:9501");
     BOOST_CHECK_EQUAL(value3->address_family(), message::avp::value::AddressFamilyV::IPv6);
 
@@ -43,7 +44,8 @@ BOOST_AUTO_TEST_CASE(constructor)
     BOOST_CHECK_EQUAL(value7->address_string(), "::1");
 
     // Test case 8: IPv4-mapped IPv6 address
-    auto value8 = message::avp::Address(message::avp::value::AddressFamilyV::IPv6, "::ffff:192.168.1.1");
+    auto value8
+        = message::avp::Address(message::avp::value::AddressFamilyV::IPv6, "::ffff:192.168.1.1");
     BOOST_CHECK_EQUAL(value8->address_string(), "::ffff:192.168.1.1");
 
     // Test case 9: Empty string (invalid)
@@ -62,11 +64,13 @@ BOOST_AUTO_TEST_CASE(constructor)
     BOOST_CHECK_EQUAL(value12->address_string(), "255.255.255.255");
 
     // Test case 13: Invalid IPv6 (too many segments)
-    BOOST_CHECK_THROW(message::avp::Address(message::avp::value::AddressFamilyV::IPv6, 
-        "2001:DB8:3C4D:7777:260:3EFF:FE15:9501:1234"), std::runtime_error);
+    BOOST_CHECK_THROW(message::avp::Address(message::avp::value::AddressFamilyV::IPv6,
+                          "2001:DB8:3C4D:7777:260:3EFF:FE15:9501:1234"),
+        std::runtime_error);
 
     // Test case 14: IPv4 with wrong family specified
-    BOOST_CHECK_THROW(message::avp::Address(message::avp::value::AddressFamilyV::IPv6, "192.168.1.1"),
+    BOOST_CHECK_THROW(message::avp::Address(message::avp::value::AddressFamilyV::IPv6,
+                          "192.168.1.1"),
         std::runtime_error);
 
     // Test case 15: IPv6 with wrong family specified

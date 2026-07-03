@@ -30,9 +30,11 @@
 
 namespace netpacker {
 
+// clang-format off
 template <typename OutputIt,
           typename T,
           diameter::message::is_diameter_message_header<T>* dummy = nullptr>
+// clang-format on
 OutputIt put(OutputIt possition, OutputIt last, const T& value)
 {
     auto pos = put(possition, last, value.version);
@@ -45,9 +47,11 @@ OutputIt put(OutputIt possition, OutputIt last, const T& value)
     return pos;
 }
 
+// clang-format off
 template <typename T,
           typename InputIt,
           diameter::message::is_diameter_message_header<T>* dummy = nullptr>
+// clang-format on
 T get(InputIt& possition, InputIt last)
 {
     T value;

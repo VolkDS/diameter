@@ -9,7 +9,7 @@ BOOST_AUTO_TEST_SUITE(message_header_tests)
 BOOST_AUTO_TEST_CASE(default_constructor)
 {
     Header h{};
-    
+
     BOOST_CHECK_EQUAL(h.version, ProtocolVersion{});
     BOOST_CHECK_EQUAL(h.length, MessageLength{});
     BOOST_CHECK_EQUAL(h.command_flags[CommandFlag::Request], false);
@@ -24,6 +24,7 @@ BOOST_AUTO_TEST_CASE(default_constructor)
 
 BOOST_AUTO_TEST_CASE(field_initialization)
 {
+    // clang-format off
     Header h {
         ProtocolVersion{1},
         MessageLength{300},
@@ -33,6 +34,7 @@ BOOST_AUTO_TEST_CASE(field_initialization)
         HopByHopIdentifier{0xdeadbeef},
         EndToEndIdentifier{0xcafebabe}
     };
+    // clang-format on
 
     BOOST_CHECK_EQUAL(h.version, ProtocolVersion{1});
     BOOST_CHECK_EQUAL(h.length, MessageLength{300});
