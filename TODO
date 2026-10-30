@@ -1,4 +1,442 @@
 # TODO
 
-- In the `diameter::core::io::Connector` class, replace `start_timer()` with a call to `call_on_connect_cb(error)` because otherwise the `Events::I_RCV_CONN_NACK` event in the `diameter::core::peer::Peer` class does not work.
-- In the `diameter::core::io::Connector` class, fix the `stop()` function. It appears that it does not work at all.
+Updated on 2026-10-30 based on source review, tests, and build checks. This is
+an implementation backlog, not confirmation of full RFC 6733 compliance.
+All paths below are relative to the repository root.
+
+## Already implemented
+
+- `include/diameter/message/`: Header, Message, and AVP structures, flags,
+  basic and derived value types, Grouped values, size and padding calculation.
+- `include/diameter/serial/`: encoding and decoding through Netpacker,
+  decoded values stored as OctetString with subsequent type conversion;
+  checks for the protocol version and minimum header and AVP lengths.
+- `include/diameter/application/common/`: base command, AVP, and Result-Code
+  constants; builders for CER/CEA, DWR/DWA, and DPR/DPA. There is no general
+  command validator; individual Diameter applications are not implemented yet.
+- `include/diameter/core/io/`: asynchronous TCP accept/connect, message reads
+  using the header and declared length, and a write queue. SCTP and TLS/DTLS
+  are not implemented.
+- `include/diameter/core/peer/peer.h`, `src/core/peer/peer.cpp`: the Peer state
+  table, outgoing and incoming connection handling, election, control messages,
+  and callbacks. The main branches exist but need fixes and tests.
+- `include/diameter/core/manager/manager.h`: object creation from configuration,
+  matching incoming CER messages to configured peers, and control request
+  generation. The public application message exchange API is incomplete.
+- `include/diameter/core/controller/`: waiting for the first CER and tracking
+  outgoing requests with timers. WatchdogController consists mostly of stubs
+  and is not connected to Manager.
+- `include/diameter/log/`: a logging macro contract and an example logger_impl.h.
+
+## Review checks
+
+- `cmake --build build -j 2` and `ctest --test-dir build --output-on-failure`
+  pass in the existing Debug configuration, including the example builds.
+  The sources contain 64 test cases, 7 of which are empty; the Peer and Manager
+  tests are empty. Passing CTest therefore does not establish that the network
+  core works correctly.
+- Small standalone programs confirmed the following cases:
+  a Message declaring a length of 28 consumes 32 bytes when an AVP extends past
+  its boundary; an AVP with Vendor-Id present and V cleared has size()=16 but
+  encodes to 12 bytes; make_peer_info() accepts a CER missing mandatory AVPs;
+  a cancelled timer from an old request completes a new request with the same
+  IDs with a Timeout error.
+- A clean configuration in `/tmp` with `DIAMETER_HEADER_ONLY=ON`, tests, and
+  examples fails to link: definitions of the Peer tables and make_peer_info()
+  are missing. Boost 1.84 was located using CMAKE_PREFIX_PATH from the existing
+  build configuration.
+- TLS, SCTP, and interoperability with an external Diameter implementation
+  were not tested.
+
+## P0 — fix before using the network core
+
+- [ ] Complete the public Manager API: peer lookup/access, sending requests
+  with response callbacks and timeouts, sending answers, and send failure
+  notifications. on_recv_message_handler() currently ignores message;
+  registered user callbacks for messages and state changes are never called.
+  Align IPeer with Peer: Peer does not inherit IPeer, although Manager exposes
+  it in callback signatures. Check: application request/answer exchange through
+  Manager. Files: `core/manager/manager.h`, `core/peer/{ipeer,peer}.h` under
+  include/diameter.
+
+- [ ] Fix Connector error propagation to Peer — an original TODO item.
+  After a resolve/bind/connect attempt is exhausted, call on_connect_cb(error)
+  so that I_RCV_CONN_NACK is raised. Assign the reconnect policy to a single
+  layer and eliminate indefinite internal retries that hide the result of
+  an attempt from the FSM. File: `include/diameter/core/io/connector.h`.
+
+- [ ] Implement Connector::stop() — an original TODO item: cancel the resolver,
+  timer, and connect operation, close any socket not yet handed off, release
+  callbacks, and call on_stop_cb once. Currently, only two atomic flags change.
+  Define the contract for calling run() again after stop()/success and check
+  cancellation at every connection stage.
+  File: `include/diameter/core/io/connector.h`.
+
+- [ ] Bound Message decoding by its own declared length, check the remaining
+  space before reading each AVP and subtracting avp.size(), and require exact
+  consumption of the body. Apply the same fix to Grouped parsing, which also
+  subtracts sizes without checking. The current code can consume data from
+  the next message and cause unsigned underflow. Checks: truncated data, an AVP
+  larger than the remaining body, multiple messages in one buffer, and malformed
+  nested Grouped values. Files: `include/diameter/serial/message.h`,
+  `include/diameter/serial/avp/avp.h`.
+
+- [ ] Keep V and the optional Vendor-Id consistent when calculating lengths
+  and serializing: length() uses the presence of vendor_id, whereas put() uses
+  the V flag. Reject both inconsistent combinations before writing. Check
+  Vendor-Id=0 with V=1. Files: `include/diameter/message/avp/avp.h`,
+  `include/diameter/serial/avp/avp.h`.
+
+- [ ] Protect MessageController against late callbacks from cancelled timers:
+  check operation_aborted before modifying the table and bind the handler to
+  a specific request/timer instance. Currently, looking up only the peer and
+  IDs allows an old timer to remove a new request. Checks: answer/timeout,
+  disconnect/timeout, and ID reuse; exactly one completion per request.
+  File: `include/diameter/core/controller/message_controller.h`.
+
+- [ ] Eliminate recursive lock acquisition and calls to external code while
+  holding mutexes. For example, configure() holds m_mutex and calls peer->stop();
+  when the peer is open, DPR generation acquires m_mutex again. Incoming CER
+  handling also invokes IncomingController and Peer callbacks under locks.
+  Copy the callback/state under the lock and invoke it after releasing the lock;
+  check reentry into the library API from user callbacks.
+  Files: Manager, Peer, IncomingController.
+
+- [ ] Add explicit Manager shutdown and safe controller cleanup: cancel
+  operations, complete pending requests, and prevent handlers capturing `this`
+  from accessing a destroyed owner. Break shared_ptr cycles between Peer,
+  Connector/Connection, and callbacks. Checks: peer removal, Manager destruction
+  with active I/O and timers, and absence of leaks and use-after-free.
+  Files: `include/diameter/core/{manager,controller,peer,io}/*.h`.
+
+- [ ] Validate CER/CEA before successfully opening Peer: mandatory AVPs,
+  the answer Result-Code, the expected remote identity, and application
+  compatibility. Manager currently always builds a successful CEA,
+  process_CEA() only parses PeerInfo, and receiving CEA in WAIT_RETURNS bypasses
+  process_CEA() entirely. Checks: a negative/invalid CEA does not move the peer
+  to OPEN; invalid AVP values do not let exceptions escape an Asio handler.
+  Files: Manager, Peer, `src/core/peer/info.cpp`.
+
+- [ ] Do not ignore use_tls=true: until a secure transport is implemented,
+  explicitly reject this configuration instead of creating a plain TCP
+  connection. Complete TLS support separately under P1 below.
+  Files: `include/diameter/core/config/config.h`, Manager, I/O.
+
+## P1 — complete the base protocol and fix partial implementations
+
+### Message and serial
+
+- [ ] Validate 24-bit fields when writing: Message/AVP lengths and Command-Code,
+  total size overflow, and Message Length alignment to four bytes. Validate
+  lengths before allocating the receive buffer. The header currently checks
+  only the minimum length of 20, and writing three bytes can truncate a value.
+  Files: `message/{message.h,header/*,avp/avp.h}`,
+  `serial/{header/header.h,avp/avp.h}` under include/diameter.
+
+- [ ] Write zero AVP padding explicitly: skipbytes() only advances the iterator,
+  so the result depends on the previous contents of the caller's buffer.
+  Check: serialization into a buffer prefilled with nonzero bytes.
+  File: `include/diameter/serial/avp/avp.h`.
+
+- [ ] Remove the requirement to call size() before serialization:
+  Message::size() updates header.length, while put(Message) writes it as is.
+  Define a consistent length calculation/validation contract and provide safe
+  default values for Header, AVP, BasicValue, and PeerInfo::vendor_id.
+  Checks: builder -> encode directly, and encoding again after modifying AVPs.
+
+- [ ] Validate header semantics and command/AVP flags, including R/E/T/P
+  combinations, reserved bit handling on receive and send, and command/application
+  IDs. Separate structural decoding from command-specific validation; preserving
+  an unknown AVP as OctetString is valid in itself.
+  Files: `include/diameter/serial/`, `include/diameter/application/common/`.
+
+### Peer, control commands, and capabilities
+
+- [ ] Extend make_peer_info() to check AVP presence and occurrence counts,
+  using explicit counters instead of zero/empty strings as absence indicators.
+  Account for the AVP Vendor-Id when identifying base AVPs; parse Host-IP-Address,
+  Result-Code, Origin-State-Id, and Firmware-Revision. Validate occurrence counts
+  of nested AVPs in Vendor-Specific-Application-Id.
+  Files: `src/core/peer/info.cpp`, `include/diameter/core/peer/info.h`.
+
+- [ ] Preserve the distinction between vendor-specific Auth-Application-Id and
+  Acct-Application-Id: PeerInfo currently stores both in one
+  set<pair<vendor,application>>, and Manager generates all of them as Auth.
+  Retain remote capabilities and the negotiated application set, and use them
+  when sending. Check relay support and NO_COMMON_APPLICATION; verify application
+  matching against RFC §5.3 and §6.11.
+  Files: PeerInfo, make_peer_info(), Manager, Peer.
+
+- [ ] Implement a common mechanism for building protocol-error answers and
+  error CEAs: Result-Code, Error-Message, Failed-AVP, the required flags, and
+  identifiers from the original request. Do not send error answers in response
+  to answers. Error code enums and exceptions exist, but their mapping to
+  protocol responses is incomplete. Files: `application/common/message_builder.h`,
+  `core/error.h`, `serial/error.h`, Manager, and Peer under include/diameter.
+
+- [ ] Add validators for CER/CEA, DWR/DWA, and DPR/DPA, and error builders:
+  AVP requirements, occurrence counts, types, allowed values, and unknown
+  mandatory AVPs, including nested Grouped values. Check DWA/DPA Result-Code
+  and DPR Disconnect-Cause. Builders currently allow arbitrary incomplete
+  messages, and adding Result-Code implicitly changes Request to Answer.
+  Files: `include/diameter/application/common/`, Peer.
+
+- [ ] Fix dispatch of messages with Application-Id=0: unknown commands are
+  currently silently dropped in default branches, including cases that should
+  raise I_Rcv-Non-CEA in WAIT_CEA. Deliver valid messages to application logic
+  or produce the appropriate error; report unexpected events.
+  File: `include/diameter/core/peer/peer.h`.
+
+- [ ] Check every FSM branch against the table in RFC §5.6, including both
+  orderings of simultaneous connect/CER, election loss, disconnection of either
+  connection in ELECT/WAIT_RETURNS, and handling of an error CEA. Add local
+  START/handshake cancellation: STOP is currently absent in intermediate states.
+  Preserve the intended transition/enter action order: actions read the old
+  state, so do not change StateMachine mechanically.
+  Files: `include/diameter/core/fsm.h`, Peer, `src/core/peer/peer.cpp`.
+
+- [ ] Complete DPR/DPA shutdown: wait for DPA after a local DPR, send DPA before
+  closing after an incoming DPR, enforce a CLOSING timeout, and release all
+  resources. Incoming DPR currently does not start a close timer; without
+  disconnection by the other side, the peer can remain in CLOSING. Account for
+  Disconnect-Cause when reconnecting instead of always using REBOOTING.
+  Files: Peer, Manager, MessageController.
+
+- [ ] Use consistent ASCII case-insensitive DiameterIdentity comparisons for
+  peer lookup and election; elect() currently ignores case, while full_id()
+  does not. Avoid composite keys built by simple string concatenation; handle
+  identical local/remote identities and duplicate peer configurations.
+  Files: `include/diameter/core/peer/peer.h`, Manager, Config.
+
+### Controllers, identifiers, and recovery
+
+- [ ] Complete WatchdogController and attach instances to connections:
+  INITIAL/OKAY/SUSPECT/DOWN/REOPEN states, pending DWR tracking, traffic events,
+  the Tw timer, recovery, failover/failback callbacks, and DWR generation.
+  on_generate_DWR_cb is currently registered but never called, and
+  watchdog_timeout is unused. Verify the algorithm against RFC 3539 §3.4
+  and Appendix A, including jitter and the DWA count required to leave REOPEN.
+  Files: WatchdogController, Manager, Peer.
+
+- [ ] Implement reconnect using reconnect_timeout after connection failure
+  or loss of an open connection; distinguish connect, CER/CEA, request,
+  watchdog, and close timeouts. Do not route all control request timeouts to
+  the same Peer::timeout(): OPEN, for example, has no such transition.
+  Checks: late answers, prolonged remote node unavailability, and stopping
+  reconnect attempts on explicit shutdown. Files: Manager, controllers, I/O.
+
+- [ ] Fix incoming connection ownership in IncomingController: remove waiting
+  entries on handoff to Peer/rejection/disconnection, hand off exactly once,
+  check callback availability, and do not rely on the later callback of
+  a cancelled timer to remove an entry. Protect conn_id generation across
+  controller instances. Check back-to-back CER and subsequent messages,
+  a timeout concurrent with CER, and controller shutdown.
+  File: `include/diameter/core/controller/incoming_controller.h`.
+
+- [ ] Complete request/answer correlation using the specific connection and
+  its generation, Command-Code, Application-Id, and R-bit. The current key is
+  a peer name and an ID pair; an answer for another command with the same IDs
+  can remove a pending request. Handle duplicates, unknown/late answers, and
+  push_request() failures, which Manager currently ignores.
+  Files: MessageController, Manager.
+
+- [ ] Improve IdsGenerator: replace reliance on unseeded global rand(), check
+  Hop-by-Hop collisions among pending requests, handle wraparound, and ensure
+  End-to-End uniqueness across restarts. Separately define a Session-Id
+  generator in the layer that will own sessions.
+  File: `include/diameter/core/ids_generator.h`.
+
+- [ ] Add duplicate request detection and agree with the calling application
+  on response storage/replay without repeating side effects. For failover,
+  expose pending requests and a callback for selecting an alternate peer,
+  and define rules for preserving/replacing IDs and the T flag.
+  handle_peer_disconnect() currently only completes requests with NetworkError.
+  Files: MessageController, Manager; document the ownership boundary in the API.
+
+### Config, I/O, and concurrency
+
+- [ ] Validate the entire Config before changing a running Manager:
+  local_peer_name references, empty host lists (currently accessed via host[0]),
+  addresses/ports, roles, supported transports, identities, durations, and
+  capabilities. Return a clear error instead of partially applying configuration
+  and failing in at(). Include Addr::type in operator==. Files: Config, Manager.
+
+- [ ] Apply updated acceptor/peer/connector configurations, including changes
+  to role and local peer; make repeated configure() calls with the same input
+  idempotent. Resolve m_connectors ownership: Manager iterates this map, but
+  create_peer() never inserts into it. Assign Connector a single owner and
+  define object creation/shutdown order during reconfiguration. File: Manager.
+
+- [ ] Implement allow_dynamic_peers and an admission/rejection callback, or
+  explicitly reject this unsupported setting. The flag is currently unused.
+  Define the unknown-peer policy: closing without CEA is allowed; if choosing
+  to answer, return UNKNOWN_PEER. Remove dynamic entries with their connection.
+  Files: Config, Manager, IncomingController.
+
+- [ ] Serialize socket/resolver/timer operations and related callbacks through
+  a strand/executor, or explicitly restrict the API to one thread. Atomic flags
+  and a queue mutex are insufficient for concurrent stop/send/read/connect;
+  check the lifetime of the active async_write buffer when clearing the queue.
+  Define callback ordering and how user exceptions are handled.
+  Files: `include/diameter/core/io/*.h`, controllers, Manager, Peer.
+
+- [ ] Complete Acceptor::stop(): cancel the resolver and retry timer, discard
+  completions from a previous run() after restarting, and report
+  resolve/open/bind/listen errors to Manager in addition to accept errors.
+  Files: `include/diameter/core/io/acceptor.h`, Manager.
+
+- [ ] Complete address list and IPv6 support: currently only host[0] is used,
+  and add_host_ip_address(string) always creates an IPv4 Address. When iterating
+  endpoints, restore the socket and local bind after an error, and account for
+  mismatched local/remote address families. Checks: IPv4/IPv6, multiple addresses,
+  and failure of the first endpoint. Files: I/O,
+  `application/common/message_builder.h`, `message/avp/value/address.h`.
+
+- [ ] Limit incoming Message size, header/body read time, the number of
+  connections waiting for CER, pending requests, and queued outgoing bytes.
+  Add notifications for rejection/queue overflow and write failures. Queues
+  are currently unbounded, and send_message() silently drops messages on closed
+  connections and does not check nullptr. Files: Connection, controllers, Config.
+
+- [ ] Distinguish graceful shutdown from aborting the transport after stream
+  corruption; decoding errors currently use ordinary shutdown/close. Verify
+  the required behavior against RFC §2.1.
+  File: `include/diameter/core/io/connection.h`.
+
+- [ ] Implement TLS/TCP: certificate/trust configuration, remote peer identity
+  validation, handshake and its timeout before capabilities exchange, failure
+  handling, and proper shutdown. Do not advertise TLS via Inband-Security-Id
+  without a working implementation; make legacy inband negotiation an explicit
+  compatibility mode. Files: Config, I/O, Manager.
+
+### AVP values
+
+- [ ] Improve DiameterURI: safe port range parsing instead of atoi(), invalid
+  transport/protocol combinations, case handling, aaa/aaas defaults, and clearly
+  defined getter state before/after validate(). Improve shared DiameterIdentity
+  validation and define where it is required on receipt.
+  Files: `include/diameter/message/avp/value/{diameter_uri,diameter_identity}.h`.
+
+- [ ] Replace partial IPFilterRule regex validation with parsing of the supported
+  grammar: numeric protocol, addresses and masks, port ranges/lists, negation,
+  and options; preserve all parsed fields. Currently, invalid IPs/masks are
+  accepted, valid forms are unsupported, and ports are not extracted.
+  File: `include/diameter/message/avp/value/ip_filter_rule.h`.
+
+- [ ] Validate derived AVP lengths/formats during semantic parsing:
+  IPv4/IPv6 Address, UTF8String, Enumerated, and Time. For Time, add wire
+  roundtrip checks at the 2036 boundary and around 2104: existing future-date
+  tests mostly check an object with a retained era rather than reconstructing
+  it from four bytes. Files: `message/avp/value/*`, `serial/avp/avp.h` under
+  include/diameter.
+
+## P2 — new features and responsibility boundaries
+
+- [ ] Document supported library roles and the scope of RFC compliance:
+  client/server, relay/proxy/redirect; for §6 and §8–9 requirements, define
+  the responsibilities of core, application modules, and calling code. Keep
+  business logic and route selection outside core unless needed; provide
+  callbacks and verify end-to-end protocol compliance across this boundary.
+
+- [ ] Implement SCTP transport and DTLS/SCTP for the full claimed RFC scope,
+  or document the limitations of the current TCP profile. Account for
+  multihoming, message boundaries and streams, PPID, and Host-IP-Address for
+  node addresses; check interaction with Peer and the watchdog algorithm.
+
+- [ ] Add an extensible application layer: identifiers, AVP dictionaries,
+  builders/parsers, and command validators under application/<name>.
+  `include/diameter/application/application.h` is currently empty. Prioritize
+  specific applications based on library consumers; do not claim application
+  support solely because its numeric ID is defined.
+
+- [ ] Complete APIs for base session/accounting commands: RAR/RAA, STR/STA,
+  ASR/ASA, and ACR/ACA. Currently, only command/AVP codes exist. Align session
+  FSM, timer, and accounting record storage implementation with the
+  core/application boundary; separately document stateless operation and
+  the responsibilities of the calling application.
+
+- [ ] For required agent roles, add a host/realm/application routing interface,
+  Route-Record/Proxy-Info, loop detection, redirect handling, and reverse answer
+  correlation. Define ownership of the routing table/cache; these features
+  are currently absent and are not needed by every library consumer.
+
+- [ ] If dynamic discovery is needed, add DNS NAPTR/SRV, TTL handling, and
+  a peer authorization callback, or define an external discovery API. Keep
+  discovery separate from A/AAAA resolution of a configured host in Connector.
+
+## Build, tests, integration, and documentation
+
+- [ ] Fix or explicitly limit DIAMETER_HEADER_ONLY: definitions of
+  make_peer_info() and the Peer and WatchdogController tables are in .cpp files.
+  Check: tests and both examples build and link in this mode, including use
+  from multiple translation units without ODR violations.
+
+- [ ] Fix CMake usage requirements: the STATIC target should propagate
+  Netpacker and Boost dependencies through target_link_libraries(PUBLIC),
+  and C++17 requirements through target_compile_features(PUBLIC). STATIC link
+  dependencies are currently commented out, and the language standard is set
+  only on the target itself. Check add_subdirectory() and DIAMETER_USE_SUBMODULES,
+  including dependencies outside system include paths and use in a parent project.
+
+- [ ] Add install/export rules and a package configuration for
+  find_package(diameter): examples/first already refers to this usage, but
+  no package is generated. Check a separate minimal consumer that needs only
+  target_link_libraries(... diameter::diameter).
+
+- [ ] Align build options/documentation with actual behavior: README suggests
+  cloning Netpacker, but DIAMETER_USE_SUBMODULES defaults to OFF; benchmarks
+  are added only inside tests; external dependencies are not pinned.
+  Include public headers in documentation: DOXYGEN_INPUT currently covers
+  only src.
+
+- [ ] Fill the 7 empty tests (Peer, Manager, Grouped decoding, and
+  DiameterIdentity/DiameterURI/Enumerated/IPFilterRule encoding); extend FSM
+  tests from a single transition check to the scenarios above. Add the currently
+  missing controller tests, using controllable timers without long sleeps.
+
+- [ ] Add loopback integration tests: two Manager instances, simultaneous
+  connection attempts, CER/CEA, application request/answer, watchdog, DPR/DPA,
+  reconnect, reconfiguration, and shutdown. Check fragmented TCP input and
+  consecutive messages, a multithreaded io_context, and closure during a write.
+
+- [ ] Add negative tests and fuzzing for Message/AVP/Grouped, ASan/UBSan,
+  and TSan for supported I/O scenarios. Retain regression tests for the four
+  reproduced defects and identified handshake errors. Add STATIC/header-only
+  builds and tests to CI, and measure core coverage.
+
+- [ ] Check public header independence from include order and the correctness
+  of rarely used APIs. For example, BasicValue::get() const returns a non-const
+  pointer; some headers obtain standard types only through transitive includes.
+  File: `include/diameter/message/avp/avp.h`.
+
+- [ ] Define how to provide a custom logger_impl.h for STATIC and header-only
+  builds. include/diameter/log/logger_impl.h currently contains a std::cout
+  implementation: replacing the header only in the application does not change
+  an already compiled library. Add an integration example, log levels/disabling,
+  and a defined calling-thread contract.
+
+- [ ] Review obsolete/future interfaces based on actual usage:
+  `include/diameter/core/connection/connection.h`, IPeer, make_connection_id()
+  in Manager, empty source files, and unused aliases. Remove or complete them
+  only after determining their intended purpose; update docs diagrams to match
+  the resulting API.
+
+- [ ] Update README and examples: a minimal two-node exchange without
+  developer-specific addresses, sending/receiving through callbacks, errors
+  and timeouts, configuration and its limitations, threading/ownership,
+  graceful shutdown, and custom logging. Clarify that docs/configuration.yml
+  is a format draft; the library has no YAML loader yet. Decide whether a loader
+  belongs here or whether the calling application should populate Config.
+
+- [ ] Check interoperability with an independent Diameter implementation and
+  create a mapping of RFC requirement -> implementation/owner -> test -> limitation.
+  Until then, describe the current implementation as incomplete.
+
+## Normative references
+
+- [RFC 6733](https://www.rfc-editor.org/rfc/rfc6733.html): §2.1–2.2 transport
+  and security, §3–4 wire format/AVPs, §5.3–5.6 capabilities and peer FSM,
+  §6–7 processing/errors, §8–9 sessions/accounting, §13 security.
+- [RFC 3539](https://www.rfc-editor.org/rfc/rfc3539.html): §3.4 and Appendix A
+  for watchdog implementation. The docs diagram does not replace verification
+  against the RFC algorithm.
