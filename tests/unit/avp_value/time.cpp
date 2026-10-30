@@ -94,4 +94,67 @@ BOOST_AUTO_TEST_CASE(constructor_from_ntp)
     BOOST_CHECK_EQUAL(time_to_string(time_ex4->to_unix()), "2036-02-08 00:00:00");
 }
 
+BOOST_AUTO_TEST_CASE(unix_epoch_and_wire_size)
+{
+    const auto time = message::avp::Time(std::chrono::system_clock::from_time_t(0));
+    BOOST_CHECK_EQUAL(time->value(), 2'208'988'800u);
+    BOOST_CHECK_EQUAL(time->era(), 0);
+    BOOST_CHECK_EQUAL(time.size(), 4);
+    BOOST_CHECK_EQUAL(std::chrono::system_clock::to_time_t(time->to_unix()), 0);
+}
+
+BOOST_AUTO_TEST_CASE(inferred_era_wraps_at_2036_boundary)
+{
+    const auto before = message::avp::Time(uint32_t{0xffffffff});
+    const auto after = message::avp::Time(uint32_t{0});
+    BOOST_CHECK_EQUAL(before->era(), 0);
+    BOOST_CHECK_EQUAL(after->era(), 1);
+    const auto difference = std::chrono::duration_cast<std::chrono::seconds>(
+        after->to_unix() - before->to_unix());
+    BOOST_CHECK_EQUAL(difference.count(), 1);
+    BOOST_CHECK_EQUAL(time_to_string(before->to_unix()), "2036-02-07 06:28:15");
+    BOOST_CHECK_EQUAL(time_to_string(after->to_unix()), "2036-02-07 06:28:16");
+}
+
+BOOST_AUTO_TEST_CASE(explicit_era_preserves_identical_wire_value)
+{
+    const auto era0 = message::avp::Time(uint32_t{2'208'988'800u}, uint32_t{0});
+    const auto era1 = message::avp::Time(uint32_t{2'208'988'800u}, uint32_t{1});
+    BOOST_CHECK_EQUAL(era0->value(), era1->value());
+    BOOST_CHECK_EQUAL(era0->era(), 0);
+    BOOST_CHECK_EQUAL(era1->era(), 1);
+    const auto difference = std::chrono::duration_cast<std::chrono::seconds>(
+        era1->to_unix() - era0->to_unix());
+    BOOST_CHECK_EQUAL(difference.count(), 4'294'967'296LL);
+}
+
+BOOST_AUTO_TEST_CASE(explicit_era_one_supports_2104_half_era_boundary)
+{
+    const auto before = message::avp::Time(uint32_t{0x7fffffff}, uint32_t{1});
+    const auto after = message::avp::Time(uint32_t{0x80000000}, uint32_t{1});
+    BOOST_CHECK_EQUAL(time_to_string(before->to_unix()), "2104-02-26 09:42:23");
+    BOOST_CHECK_EQUAL(time_to_string(after->to_unix()), "2104-02-26 09:42:24");
+    const auto reconstructed = message::avp::Time(after->to_unix());
+    BOOST_CHECK_EQUAL(reconstructed->value(), 0x80000000);
+    BOOST_CHECK_EQUAL(reconstructed->era(), 1);
+}
+
+BOOST_AUTO_TEST_CASE(pre_unix_epoch_time_can_be_represented)
+{
+    // A negative Unix timestamp is representable by system_clock and by NTP era zero.
+    const auto instant = std::chrono::system_clock::from_time_t(-1);
+    const auto check_from_unix = [&instant] {
+        const auto encoded = message::avp::Time{instant};
+        BOOST_CHECK_EQUAL(encoded->value(), 2'208'988'799u);
+        BOOST_CHECK_EQUAL(encoded->era(), 0);
+    };
+    BOOST_CHECK_NO_THROW(check_from_unix());
+    const auto ntp = message::avp::Time(uint32_t{2'208'988'799u}, uint32_t{0});
+    const auto check_to_unix = [&ntp] {
+        const auto decoded = std::chrono::system_clock::to_time_t(ntp->to_unix());
+        BOOST_CHECK_EQUAL(decoded, -1);
+    };
+    BOOST_CHECK_NO_THROW(check_to_unix());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

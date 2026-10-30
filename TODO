@@ -28,11 +28,11 @@ All paths below are relative to the repository root.
   and is not connected to Manager.
 - `include/diameter/log/`: a logging macro contract and an example logger_impl.h.
 
-## Review checks
+## Initial review checks (before the unit test expansion)
 
 - `cmake --build build -j 2` and `ctest --test-dir build --output-on-failure`
   pass in the existing Debug configuration, including the example builds.
-  The sources contain 64 test cases, 7 of which are empty; the Peer and Manager
+  The sources contained 64 test cases, 7 of which were empty; the Peer and Manager
   tests are empty. Passing CTest therefore does not establish that the network
   core works correctly.
 - Small standalone programs confirmed the following cases:
@@ -47,6 +47,50 @@ All paths below are relative to the repository root.
   build configuration.
 - TLS, SCTP, and interoperability with an external Diameter implementation
   were not tested.
+
+## Unit test expansion — 2026-10-30
+
+- Added 138 executable test cases, including template instantiations, and filled
+  all 5 Serial placeholders. The suite now runs 202 cases: 169 pass and 33 fail
+  with 67 failed assertions. The 2 empty Peer/Manager tests remain outside this
+  Message/Serial-focused change. Production code was not modified.
+- The build succeeds. CTest intentionally returns failure while the exposed
+  defects remain. Regressions are active tests, without expected-failure markers
+  or disabled cases. Existing header fixtures now use Version=1 and valid
+  Request/Proxiable/Retransmitted flags rather than Request+Error.
+- Coverage includes exact wire bytes and iterator positions, every truncated
+  header/frame/output range for small fixtures, AVP padding, Grouped nesting,
+  numeric limits and IEEE values, value conversions, copy/move ownership,
+  derived value validation, and 2036/2104 Time boundaries.
+- Latest local outputs: `build/tests/unit-test.log` (CTest output) and
+  `build/tests/unit-report.xml` (per-case Boost.Test report). These are generated
+  files in the ignored build directory, not repository artifacts.
+- An isolated Serial run under ASan/UBSan executes 118 cases: 102 pass and
+  the same 16 Serial regressions fail, with no sanitizer diagnostics.
+  Leak detection was disabled; this is not a leak-check result.
+
+Reproduce all cases with `ctest --test-dir build --output-on-failure`.
+Run an individual case with, for example:
+
+```sh
+build/tests/tests --run_test=serial_message_boundaries/decode_does_not_use_following_frame_to_finish_an_avp --log_level=test_suite
+```
+
+Failing regression groups and corresponding work items:
+
+| Area | Test suite/cases | Required fix |
+| --- | --- | --- |
+| Message boundaries | `serial_message_boundaries/decode_rejects_*`, `decode_does_not_use_following_frame_to_finish_an_avp` | Reject AVPs/partial headers/padding crossing the declared frame boundary without consuming the next frame. |
+| Cached length | `serial_message_boundaries/encode_does_not_emit_zero_or_stale_message_length`, `encode_detects_length_stale_after_avp_mutation` | Normalize the length or reject the inconsistent Message before sending it. |
+| Header validation | `serial_header_boundaries/decode_rejects_unaligned_message_lengths`, `encode_rejects_*` | Reject invalid versions/lengths and 24-bit field overflow. |
+| AVP invariants | `avp/decode_rejects_zero_vendor_id`, `encode_rejects_zero_vendor_id`, `encode_rejects_vendor_id_without_vendor_flag`, `encode_rejects_avp_length_that_does_not_fit_24_bits` | Validate the optional header and reject length truncation. |
+| Padding | `avp/encode_initializes_all_padding_bytes` | Write zero padding regardless of existing buffer contents. |
+| Const access | `basic_avp_value_tests/const_get_accessor_preserves_constness` | Correct the const get() signature/body; the test inspects the signature so the suite still compiles. |
+| Text addresses | `avp_address/text_address_rejects_embedded_nul_suffix` | Reject IPv4/IPv6 strings with data after an embedded NUL. |
+| IDNA | `avp_diameter_identity/internationalized_names_accept_ascii_a_labels`, `avp_diameter_uri/internationalized_host_accepts_ascii_a_labels` | Accept ASCII A-labels in the final DNS label. |
+| URI validation | `avp_diameter_uri/udp_*`, `port_larger_than_sixteen_bits_is_rejected` | Reject UDP for explicit/default Diameter and out-of-range ports. |
+| Filter grammar | `avp_ip_filter_rule/*` | Validate IPs/masks/ports and support numeric protocol, assigned/negated addresses, port lists, and established options. |
+| Time conversion | `avp_time/pre_unix_epoch_time_can_be_represented` | Support representable pre-1970 Unix timestamps when converting to/from NTP era zero. |
 
 ## P0 — fix before using the network core
 
@@ -314,8 +358,21 @@ All paths below are relative to the repository root.
 - [ ] Improve DiameterURI: safe port range parsing instead of atoi(), invalid
   transport/protocol combinations, case handling, aaa/aaas defaults, and clearly
   defined getter state before/after validate(). Improve shared DiameterIdentity
-  validation and define where it is required on receipt.
+  validation and define where it is required on receipt. Active tests now expose
+  acceptance of port 65536 and UDP for explicit/default Diameter.
   Files: `include/diameter/message/avp/value/{diameter_uri,diameter_identity}.h`.
+
+- [ ] Accept valid IDNA ASCII A-labels throughout DiameterIdentity and DiameterURI,
+  including a final label such as xn--p1ai. Both validators currently reject it
+  because their final-label regex allows only letters. Retain rejection of
+  raw non-ASCII identities. Regression tests are listed above.
+  Files: `include/diameter/message/avp/value/{diameter_identity,diameter_uri}.h`.
+
+- [ ] Reject embedded NUL characters in textual IPv4/IPv6 Address construction.
+  inet_pton() currently sees only the prefix, so a std::string containing
+  "127.0.0.1\0invalid" is accepted. Validate the complete input string;
+  preserve support for zero octets in binary Address/OctetString payloads.
+  File: `include/diameter/message/avp/value/address.h`.
 
 - [ ] Replace partial IPFilterRule regex validation with parsing of the supported
   grammar: numeric protocol, addresses and masks, port ranges/lists, negation,
@@ -327,7 +384,11 @@ All paths below are relative to the repository root.
   IPv4/IPv6 Address, UTF8String, Enumerated, and Time. For Time, add wire
   roundtrip checks at the 2036 boundary and around 2104: existing future-date
   tests mostly check an object with a retained era rather than reconstructing
-  it from four bytes. Files: `message/avp/value/*`, `serial/avp/avp.h` under
+  it from four bytes. New tests cover inferred 2036 rollover and explicit-era
+  2104 conversion; implicit reconstruction at the half-era boundary still needs
+  a documented policy. Fix rejection of representable pre-1970 timestamps in
+  TimeBase's Unix/NTP conversions, now covered by an active failing test.
+  Files: `message/avp/value/*`, `serial/avp/avp.h` under
   include/diameter.
 
 ## P2 — new features and responsibility boundaries
@@ -389,9 +450,11 @@ All paths below are relative to the repository root.
   Include public headers in documentation: DOXYGEN_INPUT currently covers
   only src.
 
-- [ ] Fill the 7 empty tests (Peer, Manager, Grouped decoding, and
-  DiameterIdentity/DiameterURI/Enumerated/IPFilterRule encoding); extend FSM
-  tests from a single transition check to the scenarios above. Add the currently
+- [x] Fill the 5 empty Serial tests: Grouped decoding and
+  DiameterIdentity/DiameterURI/Enumerated/IPFilterRule encoding.
+
+- [ ] Fill the 2 remaining empty tests (Peer and Manager); extend FSM tests
+  from a single transition check to the scenarios above. Add the currently
   missing controller tests, using controllable timers without long sleeps.
 
 - [ ] Add loopback integration tests: two Manager instances, simultaneous

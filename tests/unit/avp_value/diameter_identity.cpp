@@ -45,4 +45,50 @@ BOOST_AUTO_TEST_CASE(constructor)
     BOOST_CHECK_EQUAL(value13->validate(), true);
 }
 
+BOOST_AUTO_TEST_CASE(value_and_size_preserve_ascii_case)
+{
+    const std::string text{"Peer.Example.COM"};
+    const auto identity = message::avp::DiameterIdentity(text);
+    BOOST_CHECK(identity->validate());
+    BOOST_CHECK_EQUAL(identity->value(), text);
+    BOOST_CHECK_EQUAL(identity.size(), text.size());
+}
+
+BOOST_AUTO_TEST_CASE(dns_label_length_boundaries)
+{
+    const auto maximum = message::avp::DiameterIdentity(std::string(63, 'a') + ".example.com");
+    const auto excessive = message::avp::DiameterIdentity(std::string(64, 'a') + ".example.com");
+    BOOST_CHECK(maximum->validate());
+    BOOST_CHECK(!excessive->validate());
+}
+
+BOOST_AUTO_TEST_CASE(dns_name_length_boundaries)
+{
+    const std::string maximum = std::string(63, 'a') + '.' + std::string(63, 'b') + '.'
+        + std::string(63, 'c') + '.' + std::string(61, 'd');
+    BOOST_REQUIRE_EQUAL(maximum.size(), 253);
+    BOOST_CHECK(message::avp::DiameterIdentity(maximum)->validate());
+    BOOST_CHECK(!message::avp::DiameterIdentity(maximum + 'd')->validate());
+}
+
+BOOST_AUTO_TEST_CASE(invalid_dns_syntax_is_rejected)
+{
+    const std::vector<std::string> texts{"", ".example.com", "peer..example.com",
+        "peer example.com", "peer.example.com:3868", "peer/example.com",
+        std::string{"peer\0.example.com", 17}, "peer.\xc3\xa9xample.com"};
+    for (const auto& text : texts) {
+        BOOST_TEST_CONTEXT("identity size " << text.size()) {
+            const auto identity = message::avp::DiameterIdentity(text);
+            BOOST_CHECK(!identity->validate());
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(internationalized_names_accept_ascii_a_labels)
+{
+    // RFC 6733 Appendix D requires the ASCII-compatible form of internationalized names.
+    const auto identity = message::avp::DiameterIdentity("xn--e1afmkfd.xn--p1ai");
+    BOOST_CHECK(identity->validate());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

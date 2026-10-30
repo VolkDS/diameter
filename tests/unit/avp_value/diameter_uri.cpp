@@ -96,4 +96,86 @@ BOOST_AUTO_TEST_CASE(constructor)
     BOOST_CHECK_EQUAL(value9->protocol().has_value(), false);
 }
 
+BOOST_AUTO_TEST_CASE(sctp_uri_with_all_fields_and_repeat_validation)
+{
+    const std::string text{"aaas://peer.example.com:5658;transport=sctp;protocol=diameter"};
+    auto uri = message::avp::DiameterURI(text);
+    BOOST_REQUIRE(uri->validate());
+    BOOST_CHECK_EQUAL(uri->value(), text);
+    BOOST_CHECK_EQUAL(uri.size(), text.size());
+    BOOST_CHECK_EQUAL(uri->scheme(), "aaas");
+    BOOST_CHECK_EQUAL(uri->fqdn(), "peer.example.com");
+    BOOST_REQUIRE(uri->port().has_value());
+    BOOST_CHECK_EQUAL(uri->port().value(), 5658);
+    BOOST_REQUIRE(uri->transport().has_value());
+    BOOST_CHECK_EQUAL(uri->transport().value(), "sctp");
+    BOOST_REQUIRE(uri->protocol().has_value());
+    BOOST_CHECK_EQUAL(uri->protocol().value(), "diameter");
+    BOOST_CHECK(uri->validate());
+    BOOST_CHECK_EQUAL(uri->port().value(), 5658);
+}
+
+BOOST_AUTO_TEST_CASE(invalid_syntax_is_rejected)
+{
+    const char* texts[]{"", "aaa://", "aaa://-peer.example.com", "aaa://peer..example.com",
+        "aaa://peer.example.com/path", "aaa://peer.example.com?query=1",
+        "aaa://peer.example.com#fragment", "aaa://peer.example.com:",
+        "aaa://peer.example.com:abc", "aaa://user@peer.example.com",
+        "aaa://peer.example.com;transport=quic", "aaa://peer.example.com;protocol=unknown",
+        "aaa://peer.example.com;protocol=diameter;transport=tcp"};
+    for (const auto* text : texts) {
+        BOOST_TEST_CONTEXT(text) {
+            auto uri = message::avp::DiameterURI(text);
+            BOOST_CHECK(!uri->validate());
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(udp_is_rejected_for_explicit_diameter_protocol)
+{
+    auto uri = message::avp::DiameterURI(
+        "aaa://peer.example.com;transport=udp;protocol=diameter");
+    BOOST_CHECK(!uri->validate());
+}
+
+BOOST_AUTO_TEST_CASE(udp_is_rejected_for_default_diameter_protocol)
+{
+    auto uri = message::avp::DiameterURI("aaa://peer.example.com;transport=udp");
+    BOOST_CHECK(!uri->validate());
+}
+
+BOOST_AUTO_TEST_CASE(udp_diameter_restriction_is_case_insensitive)
+{
+    auto uri = message::avp::DiameterURI(
+        "AAA://PEER.EXAMPLE.COM;transport=UDP;protocol=DIAMETER");
+    BOOST_CHECK(!uri->validate());
+}
+
+BOOST_AUTO_TEST_CASE(udp_remains_valid_for_radius)
+{
+    auto uri = message::avp::DiameterURI(
+        "aaa://peer.example.com:1812;transport=udp;protocol=radius");
+    BOOST_CHECK(uri->validate());
+}
+
+BOOST_AUTO_TEST_CASE(internationalized_host_accepts_ascii_a_labels)
+{
+    auto uri = message::avp::DiameterURI("aaa://xn--e1afmkfd.xn--p1ai;transport=tcp");
+    BOOST_CHECK(uri->validate());
+}
+
+BOOST_AUTO_TEST_CASE(largest_transport_port_is_supported)
+{
+    auto uri = message::avp::DiameterURI("aaa://peer.example.com:65535;transport=tcp");
+    BOOST_REQUIRE(uri->validate());
+    BOOST_REQUIRE(uri->port().has_value());
+    BOOST_CHECK_EQUAL(uri->port().value(), 65535);
+}
+
+BOOST_AUTO_TEST_CASE(port_larger_than_sixteen_bits_is_rejected)
+{
+    auto uri = message::avp::DiameterURI("aaa://peer.example.com:65536;transport=tcp");
+    BOOST_CHECK(!uri->validate());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

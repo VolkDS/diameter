@@ -290,6 +290,24 @@ BOOST_AUTO_TEST_CASE(decode_float64_avp)
 
 BOOST_AUTO_TEST_CASE(decode_grouped_avp)
 {
+    // Child padding belongs to the Grouped data, but outer padding does not.
+    std::vector<uint8_t> data;
+    load_from_hex("000001284000001c0000010840000009610000000000010a40000008", data);
+    auto pos = data.begin();
+    const auto outer = netpacker::get<message::avp::AVP>(pos, data.end());
+    BOOST_CHECK(pos == data.end());
+    BOOST_CHECK_EQUAL(outer.length(), 28);
+    const auto children = serial::avp::value_as<message::avp::Grouped>(outer.value);
+    BOOST_REQUIRE_EQUAL(children->size(), 2);
+    auto child = children->begin();
+    BOOST_CHECK_EQUAL(child->code, 264);
+    BOOST_CHECK_EQUAL(child->length(), 9);
+    BOOST_CHECK_EQUAL(child->size(), 12);
+    BOOST_CHECK_EQUAL(*serial::avp::value_as<message::avp::UTF8String>(child->value), "a");
+    ++child;
+    BOOST_CHECK_EQUAL(child->code, 266);
+    BOOST_CHECK_EQUAL(child->length(), 8);
+    BOOST_CHECK(serial::avp::value_as<message::avp::OctetString>(child->value)->empty());
 }
 
 BOOST_AUTO_TEST_CASE(decode_address_avp)
@@ -700,18 +718,268 @@ BOOST_AUTO_TEST_CASE(encode_utf8_string_avp)
 
 BOOST_AUTO_TEST_CASE(encode_diameter_identity_avp)
 {
+    const auto value = message::avp::AVP{264,
+        message::avp::Flags{message::avp::Flag::Mandatory}, std::nullopt,
+        message::avp::DiameterIdentity("example.com")};
+    std::vector<uint8_t> expected;
+    load_from_hex("00000108400000136578616d706c652e636f6d00", expected);
+    std::vector<uint8_t> data(expected.size());
+    const auto end = netpacker::put(data.begin(), data.end(), value);
+    BOOST_CHECK(end == data.end());
+    BOOST_CHECK_EQUAL_COLLECTIONS(data.begin(), data.end(), expected.begin(), expected.end());
+    auto pos = data.begin();
+    const auto decoded = netpacker::get<message::avp::AVP>(pos, data.end());
+    BOOST_CHECK(pos == data.end());
+    BOOST_CHECK_EQUAL(serial::avp::value_as<message::avp::DiameterIdentity>(decoded.value)->value(),
+        "example.com");
 }
 
 BOOST_AUTO_TEST_CASE(encode_diameter_uri_avp)
 {
+    const auto value = message::avp::AVP{292,
+        message::avp::Flags{message::avp::Flag::Mandatory}, std::nullopt,
+        message::avp::DiameterURI("aaa://example.com")};
+    std::vector<uint8_t> expected;
+    load_from_hex("00000124400000196161613a2f2f6578616d706c652e636f6d000000", expected);
+    std::vector<uint8_t> data(expected.size());
+    const auto end = netpacker::put(data.begin(), data.end(), value);
+    BOOST_CHECK(end == data.end());
+    BOOST_CHECK_EQUAL_COLLECTIONS(data.begin(), data.end(), expected.begin(), expected.end());
+    auto pos = data.begin();
+    const auto decoded = netpacker::get<message::avp::AVP>(pos, data.end());
+    BOOST_CHECK(pos == data.end());
+    BOOST_CHECK_EQUAL(serial::avp::value_as<message::avp::DiameterURI>(decoded.value)->value(),
+        "aaa://example.com");
 }
 
 BOOST_AUTO_TEST_CASE(encode_enumerated_avp)
 {
+    const auto value = message::avp::AVP{273,
+        message::avp::Flags{message::avp::Flag::Mandatory}, std::nullopt,
+        message::avp::Enumerated(-2)};
+    const std::vector<uint8_t> expected{
+        0, 0, 1, 0x11, 0x40, 0, 0, 12, 0xff, 0xff, 0xff, 0xfe};
+    std::vector<uint8_t> data(expected.size());
+    const auto end = netpacker::put(data.begin(), data.end(), value);
+    BOOST_CHECK(end == data.end());
+    BOOST_CHECK_EQUAL_COLLECTIONS(data.begin(), data.end(), expected.begin(), expected.end());
+    auto pos = data.begin();
+    const auto decoded = netpacker::get<message::avp::AVP>(pos, data.end());
+    BOOST_CHECK(pos == data.end());
+    BOOST_CHECK_EQUAL(serial::avp::value_as<message::avp::Enumerated>(decoded.value)->value(), -2);
 }
 
 BOOST_AUTO_TEST_CASE(encode_ipfilter_rule_avp)
 {
+    const auto value = message::avp::AVP{271,
+        message::avp::Flags{message::avp::Flag::Mandatory}, std::nullopt,
+        message::avp::IPFilterRule("permit in ip from any to any")};
+    std::vector<uint8_t> expected;
+    load_from_hex("0000010f400000247065726d697420696e2069702066726f6d20616e7920746f20616e79", expected);
+    std::vector<uint8_t> data(expected.size());
+    const auto end = netpacker::put(data.begin(), data.end(), value);
+    BOOST_CHECK(end == data.end());
+    BOOST_CHECK_EQUAL_COLLECTIONS(data.begin(), data.end(), expected.begin(), expected.end());
+    auto pos = data.begin();
+    const auto decoded = netpacker::get<message::avp::AVP>(pos, data.end());
+    BOOST_CHECK(pos == data.end());
+    BOOST_CHECK_EQUAL(serial::avp::value_as<message::avp::IPFilterRule>(decoded.value)->value(),
+        "permit in ip from any to any");
+}
+
+BOOST_AUTO_TEST_CASE(decode_empty_data)
+{
+    const std::vector<uint8_t> data{0, 0, 0, 1, 0, 0, 0, 8};
+    auto pos = data.begin();
+    const auto value = netpacker::get<message::avp::AVP>(pos, data.end());
+    BOOST_CHECK(pos == data.end());
+    BOOST_CHECK_EQUAL(value.length(), 8);
+    BOOST_CHECK_EQUAL(value.padding(), 0);
+    BOOST_CHECK(serial::avp::value_as<message::avp::OctetString>(value.value)->empty());
+}
+
+BOOST_AUTO_TEST_CASE(decode_all_padding_lengths_and_next_avp)
+{
+    for (uint8_t payload_size = 0; payload_size < 4; ++payload_size) {
+        BOOST_TEST_CONTEXT("Payload size " << static_cast<unsigned>(payload_size)) {
+            std::vector<uint8_t> data{0, 0, 0, 1, 0, 0, 0,
+                static_cast<uint8_t>(8 + payload_size)};
+            data.insert(data.end(), payload_size, 0x42);
+            const auto padding = (4 - payload_size) % 4;
+            data.insert(data.end(), static_cast<std::size_t>(padding), 0);
+            const auto first_size = data.size();
+            const std::vector<uint8_t> second{0, 0, 0, 2, 0, 0, 0, 8};
+            data.insert(data.end(), second.begin(), second.end());
+            auto pos = data.begin();
+            const auto first = netpacker::get<message::avp::AVP>(pos, data.end());
+            BOOST_CHECK_EQUAL(static_cast<std::size_t>(std::distance(data.begin(), pos)), first_size);
+            const auto payload = serial::avp::value_as<message::avp::OctetString>(first.value);
+            BOOST_CHECK_EQUAL(payload.size(), payload_size);
+            for (const auto octet : *payload) {
+                BOOST_CHECK_EQUAL(octet, 0x42);
+            }
+            const auto next = netpacker::get<message::avp::AVP>(pos, data.end());
+            BOOST_CHECK_EQUAL(next.code, 2);
+            BOOST_CHECK(pos == data.end());
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(decode_rejects_short_headers)
+{
+    const std::vector<uint8_t> data{0, 0, 0, 1, 0, 0, 0, 8};
+    for (std::ptrdiff_t size = 0; size < 8; ++size) {
+        BOOST_TEST_CONTEXT("Available bytes " << size) {
+            auto pos = data.begin();
+            BOOST_CHECK_THROW(netpacker::get<message::avp::AVP>(pos, data.begin() + size),
+                netpacker::EndOfBuffer);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(decode_rejects_lengths_below_header_size)
+{
+    for (uint8_t length = 0; length < 8; ++length) {
+        BOOST_TEST_CONTEXT("Declared length " << static_cast<unsigned>(length)) {
+            const std::vector<uint8_t> data{0, 0, 0, 1, 0, 0, 0, length};
+            auto pos = data.begin();
+            BOOST_CHECK_THROW(netpacker::get<message::avp::AVP>(pos, data.end()),
+                serial::InvalidAvpLength);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(decode_rejects_vendor_lengths_below_header_size)
+{
+    for (uint8_t length = 8; length < 12; ++length) {
+        BOOST_TEST_CONTEXT("Declared length " << static_cast<unsigned>(length)) {
+            const std::vector<uint8_t> data{0, 0, 0, 1, 0x80, 0, 0, length, 0, 0, 0, 1};
+            auto pos = data.begin();
+            BOOST_CHECK_THROW(netpacker::get<message::avp::AVP>(pos, data.end()),
+                serial::InvalidAvpLength);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(decode_rejects_truncated_vendor_id)
+{
+    const std::vector<uint8_t> data{0, 0, 0, 1, 0x80, 0, 0, 12, 0, 0, 0, 1};
+    for (std::ptrdiff_t size = 8; size < 12; ++size) {
+        BOOST_TEST_CONTEXT("Available bytes " << size) {
+            auto pos = data.begin();
+            BOOST_CHECK_THROW(netpacker::get<message::avp::AVP>(pos, data.begin() + size),
+                netpacker::EndOfBuffer);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(decode_rejects_truncated_data_and_padding)
+{
+    const std::vector<uint8_t> data{0, 0, 0, 1, 0, 0, 0, 9, 0x42, 0, 0, 0};
+    for (std::ptrdiff_t size = 8; size < 12; ++size) {
+        BOOST_TEST_CONTEXT("Available bytes " << size) {
+            auto pos = data.begin();
+            BOOST_CHECK_THROW(netpacker::get<message::avp::AVP>(pos, data.begin() + size),
+                netpacker::EndOfBuffer);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(decode_rejects_zero_vendor_id)
+{
+    // RFC 6733 Section 4.1.1 forbids Vendor-Id zero in a V-bit AVP header.
+    const std::vector<uint8_t> data{0, 0, 0, 1, 0x80, 0, 0, 12, 0, 0, 0, 0};
+    auto pos = data.begin();
+    BOOST_CHECK_THROW(netpacker::get<message::avp::AVP>(pos, data.end()),
+        serial::InvalidAvpVendorId);
+}
+
+BOOST_AUTO_TEST_CASE(encode_rejects_missing_vendor_id)
+{
+    const auto value = message::avp::AVP{1,
+        message::avp::Flags{message::avp::Flag::VendorSpecific}, std::nullopt,
+        message::avp::OctetString{}};
+    std::vector<uint8_t> data(12);
+    BOOST_CHECK_THROW(netpacker::put(data.begin(), data.end(), value),
+        serial::InvalidAvpVendorId);
+}
+
+BOOST_AUTO_TEST_CASE(encode_rejects_vendor_id_without_vendor_flag)
+{
+    const auto value = message::avp::AVP{1, message::avp::Flags{}, 10415,
+        message::avp::OctetString{}};
+    std::vector<uint8_t> data(12);
+    BOOST_CHECK_THROW(netpacker::put(data.begin(), data.end(), value),
+        serial::InvalidAvpVendorId);
+}
+
+BOOST_AUTO_TEST_CASE(encode_rejects_zero_vendor_id)
+{
+    const auto value = message::avp::AVP{1,
+        message::avp::Flags{message::avp::Flag::VendorSpecific}, 0,
+        message::avp::OctetString{}};
+    std::vector<uint8_t> data(12);
+    BOOST_CHECK_THROW(netpacker::put(data.begin(), data.end(), value),
+        serial::InvalidAvpVendorId);
+}
+
+BOOST_AUTO_TEST_CASE(encode_vendor_specific_avp)
+{
+    const auto value = message::avp::AVP{1,
+        message::avp::Flags{message::avp::Flag::VendorSpecific}, 10415,
+        message::avp::Unsigned32(0x12345678U)};
+    const std::vector<uint8_t> expected{
+        0, 0, 0, 1, 0x80, 0, 0, 16, 0, 0, 0x28, 0xaf, 0x12, 0x34, 0x56, 0x78};
+    std::vector<uint8_t> data(20, 0xaa);
+    const auto end = netpacker::put(data.begin(), data.end(), value);
+    BOOST_CHECK_EQUAL(std::distance(data.begin(), end), 16);
+    BOOST_CHECK_EQUAL_COLLECTIONS(data.begin(), end, expected.begin(), expected.end());
+    BOOST_CHECK_EQUAL(data[16], 0xaa);
+    auto pos = data.begin();
+    const auto decoded = netpacker::get<message::avp::AVP>(pos, end);
+    BOOST_CHECK(pos == end);
+    BOOST_REQUIRE(decoded.vendor_id.has_value());
+    BOOST_CHECK_EQUAL(*decoded.vendor_id, 10415);
+    BOOST_CHECK_EQUAL(*serial::avp::value_as<message::avp::Unsigned32>(decoded.value), 0x12345678U);
+}
+
+BOOST_AUTO_TEST_CASE(encode_initializes_all_padding_bytes)
+{
+    for (uint8_t payload_size = 1; payload_size < 4; ++payload_size) {
+        BOOST_TEST_CONTEXT("Payload size " << static_cast<unsigned>(payload_size)) {
+            const auto value = message::avp::AVP{1, message::avp::Flags{}, std::nullopt,
+                message::avp::OctetString(std::vector<uint8_t>(payload_size, 0x42))};
+            std::vector<uint8_t> data(16, 0xaa);
+            const auto end = netpacker::put(data.begin(), data.end(), value);
+            BOOST_CHECK_EQUAL(std::distance(data.begin(), end), 12);
+            for (std::size_t i = 8U + payload_size; i < 12; ++i) {
+                BOOST_CHECK_EQUAL(data[i], 0);
+            }
+            BOOST_CHECK_EQUAL(data[12], 0xaa);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(encode_rejects_short_buffers)
+{
+    const auto value = message::avp::AVP{1, message::avp::Flags{}, std::nullopt,
+        message::avp::Unsigned32(42U)};
+    std::vector<uint8_t> data(12);
+    for (std::ptrdiff_t size = 0; size < 12; ++size) {
+        BOOST_TEST_CONTEXT("Available bytes " << size) {
+            BOOST_CHECK_THROW(netpacker::put(data.begin(), data.begin() + size, value),
+                netpacker::BufferOverflow);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(encode_rejects_avp_length_that_does_not_fit_24_bits)
+{
+    // This size reaches the first unrepresentable AVP length without integer overflow.
+    const auto value = message::avp::AVP{1, message::avp::Flags{}, std::nullopt,
+        message::avp::OctetString(std::vector<uint8_t>(0x01000000U - 8U, 0x42))};
+    std::vector<uint8_t> data(0x01000000U);
+    BOOST_CHECK_THROW(netpacker::put(data.begin(), data.end(), value), std::exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -127,4 +127,106 @@ BOOST_AUTO_TEST_CASE(full_size_calculation)
     BOOST_CHECK_EQUAL(m.size(), 192);
 }
 
+BOOST_AUTO_TEST_CASE(size_updates_header_length_and_is_idempotent)
+{
+    Message message{};
+    message.header.length = 999;
+    message.avps.push_back(avp::AVP{1, avp::Flags{}, std::nullopt, avp::UTF8String{"a"}});
+    message.avps.push_back(avp::AVP{2, avp::Flags{avp::Flag::VendorSpecific}, 10415,
+        avp::UTF8String{"abcde"}});
+    BOOST_CHECK_EQUAL(message.size(), 52);
+    BOOST_CHECK_EQUAL(message.header.length, 52);
+    BOOST_CHECK_EQUAL(message.size(), 52);
+
+    message.avps.pop_front();
+    BOOST_CHECK_EQUAL(message.size(), 40);
+    BOOST_CHECK_EQUAL(message.header.length, 40);
+    message.avps.clear();
+    BOOST_CHECK_EQUAL(message.size(), 20);
+    BOOST_CHECK_EQUAL(message.header.length, 20);
+}
+
+BOOST_AUTO_TEST_CASE(size_includes_nested_grouped_avps)
+{
+    Message message{};
+    const avp::AVP child{1, avp::Flags{}, std::nullopt, avp::UTF8String{"x"}};
+    message.avps.push_back(avp::AVP{2, avp::Flags{}, std::nullopt,
+        avp::Grouped{std::list<avp::AVP>{child, child}}});
+    BOOST_CHECK_EQUAL(message.size(), 52);
+    BOOST_CHECK_EQUAL(message.header.length, 52);
+}
+
+BOOST_AUTO_TEST_CASE(copy_constructor_preserves_order_and_owns_avps)
+{
+    Message original{};
+    original.header.version = 1;
+    original.header.hop_by_hop = 0x12345678;
+    original.header.end_to_end = 0xabcdef01;
+    original.avps.push_back(avp::AVP{1, avp::Flags{}, std::nullopt, avp::UTF8String{"first"}});
+    original.avps.push_back(avp::AVP{1, avp::Flags{}, std::nullopt, avp::UTF8String{"second"}});
+    const auto size = original.size();
+
+    Message copy{original};
+    BOOST_CHECK_EQUAL(copy.header.length, size);
+    BOOST_CHECK_EQUAL(copy.header.version, 1);
+    BOOST_CHECK_EQUAL(copy.header.hop_by_hop, 0x12345678);
+    BOOST_CHECK_EQUAL(copy.header.end_to_end, 0xabcdef01);
+    BOOST_REQUIRE_EQUAL(copy.avps.size(), 2);
+    BOOST_CHECK_EQUAL(*std::get<avp::UTF8String>(copy.avps.front().value), "first");
+    BOOST_CHECK_EQUAL(*std::get<avp::UTF8String>(copy.avps.back().value), "second");
+
+    *std::get<avp::UTF8String>(copy.avps.front().value) = "changed";
+    copy.avps.pop_back();
+    BOOST_CHECK_EQUAL(original.avps.size(), 2);
+    BOOST_CHECK_EQUAL(*std::get<avp::UTF8String>(original.avps.front().value), "first");
+}
+
+BOOST_AUTO_TEST_CASE(copy_assignment_replaces_existing_header_and_avps)
+{
+    Message original{};
+    original.header.command_code = 280;
+    original.header.command_flags.set(header::CommandFlag::Request);
+    original.avps.push_back(avp::AVP{10, avp::Flags{}, std::nullopt, avp::Unsigned32{123u}});
+    original.size();
+
+    Message destination{};
+    destination.header.command_code = 257;
+    destination.avps.push_back(avp::AVP{99, avp::Flags{}, std::nullopt, avp::UTF8String{"old"}});
+    destination = original;
+    BOOST_CHECK_EQUAL(destination.header.command_code, 280);
+    BOOST_CHECK(destination.header.command_flags[header::CommandFlag::Request]);
+    BOOST_CHECK_EQUAL(destination.header.length, 32);
+    BOOST_REQUIRE_EQUAL(destination.avps.size(), 1);
+    BOOST_CHECK_EQUAL(destination.avps.front().code, 10);
+    BOOST_CHECK_EQUAL(*std::get<avp::Unsigned32>(destination.avps.front().value), 123);
+}
+
+BOOST_AUTO_TEST_CASE(move_assignment_transfers_header_and_grouped_payload)
+{
+    Message original{};
+    original.header.command_code = 272;
+    original.header.application_id = 4;
+    original.header.hop_by_hop = 0xffffffff;
+    original.header.end_to_end = 0x87654321;
+    const avp::AVP child{1, avp::Flags{}, std::nullopt, avp::UTF8String{"retained"}};
+    original.avps.push_back(avp::AVP{2, avp::Flags{avp::Flag::VendorSpecific}, 10415,
+        avp::Grouped{std::list<avp::AVP>{child}}});
+    const auto expected_size = original.size();
+
+    Message destination{};
+    destination.avps.push_back(child);
+    destination = std::move(original);
+    BOOST_CHECK_EQUAL(destination.header.command_code, 272);
+    BOOST_CHECK_EQUAL(destination.header.application_id, 4);
+    BOOST_CHECK_EQUAL(destination.header.hop_by_hop, 0xffffffff);
+    BOOST_CHECK_EQUAL(destination.header.end_to_end, 0x87654321);
+    BOOST_CHECK_EQUAL(destination.header.length, expected_size);
+    BOOST_REQUIRE_EQUAL(destination.avps.size(), 1);
+    BOOST_CHECK_EQUAL(destination.avps.front().vendor_id.value(), 10415);
+    const auto& children = *std::get<avp::Grouped>(destination.avps.front().value);
+    BOOST_REQUIRE_EQUAL(children.size(), 1);
+    BOOST_CHECK_EQUAL(*std::get<avp::UTF8String>(children.front().value), "retained");
+    BOOST_CHECK_EQUAL(destination.size(), expected_size);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

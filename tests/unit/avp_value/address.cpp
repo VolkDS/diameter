@@ -78,4 +78,86 @@ BOOST_AUTO_TEST_CASE(constructor)
         std::runtime_error);
 }
 
+BOOST_AUTO_TEST_CASE(ipv4_payload_is_network_order_and_excludes_family)
+{
+    const auto address = message::avp::Address("192.0.2.129");
+    const std::vector<uint8_t> expected{192, 0, 2, 129};
+    const auto bytes = address->value();
+    BOOST_CHECK_EQUAL_COLLECTIONS(bytes.begin(), bytes.end(), expected.begin(), expected.end());
+    BOOST_CHECK_EQUAL(address.size(), 6);
+    BOOST_CHECK(address->is_ipv4());
+    BOOST_CHECK(!address->is_ipv6());
+}
+
+BOOST_AUTO_TEST_CASE(ipv6_payload_is_network_order_and_includes_family_in_size)
+{
+    const auto address = message::avp::Address(message::avp::value::AddressFamilyV::IPv6,
+        "2001:db8::1");
+    const std::vector<uint8_t> expected{
+        0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+    const auto bytes = address->value();
+    BOOST_CHECK_EQUAL_COLLECTIONS(bytes.begin(), bytes.end(), expected.begin(), expected.end());
+    BOOST_CHECK_EQUAL(address.size(), 18);
+    BOOST_CHECK(address->is_ipv6());
+    BOOST_CHECK(!address->is_ipv4());
+}
+
+BOOST_AUTO_TEST_CASE(binary_ipv4_validation_builds_presentation_string)
+{
+    auto address = message::avp::Address(message::avp::value::AddressFamilyV::IPv4,
+        std::vector<uint8_t>{192, 0, 2, 1});
+    BOOST_REQUIRE(address->validate());
+    BOOST_CHECK_EQUAL(address->address_string(), "192.0.2.1");
+    BOOST_CHECK(address->validate());
+    BOOST_CHECK_EQUAL(address.size(), 6);
+}
+
+BOOST_AUTO_TEST_CASE(binary_ipv6_validation_builds_presentation_string)
+{
+    auto address = message::avp::Address(message::avp::value::AddressFamilyV::IPv6,
+        std::vector<uint8_t>{0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1});
+    BOOST_REQUIRE(address->validate());
+    BOOST_CHECK_EQUAL(address->address_string(), "2001:db8::1");
+    BOOST_CHECK(address->validate());
+    BOOST_CHECK_EQUAL(address.size(), 18);
+}
+
+BOOST_AUTO_TEST_CASE(binary_ip_payload_lengths_must_match_family)
+{
+    for (std::size_t size = 0; size <= 17; ++size) {
+        BOOST_TEST_CONTEXT("payload size " << size) {
+            auto ipv4 = message::avp::Address(message::avp::value::AddressFamilyV::IPv4,
+                std::vector<uint8_t>(size));
+            auto ipv6 = message::avp::Address(message::avp::value::AddressFamilyV::IPv6,
+                std::vector<uint8_t>(size));
+            BOOST_CHECK_EQUAL(ipv4->validate(), size == 4);
+            BOOST_CHECK_EQUAL(ipv4->is_ipv4(), size == 4);
+            BOOST_CHECK_EQUAL(ipv6->validate(), size == 16);
+            BOOST_CHECK_EQUAL(ipv6->is_ipv6(), size == 16);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(unsupported_binary_family_preserves_opaque_bytes)
+{
+    const std::vector<uint8_t> expected{0, 1, 0xff};
+    auto address = message::avp::Address(uint16_t{65535}, expected);
+    BOOST_CHECK(!address->validate());
+    BOOST_CHECK(!address->is_ipv4());
+    BOOST_CHECK(!address->is_ipv6());
+    BOOST_CHECK_EQUAL(address->address_family(), 65535);
+    BOOST_CHECK_EQUAL(address.size(), 5);
+    const auto actual = address->value();
+    BOOST_CHECK_EQUAL_COLLECTIONS(actual.begin(), actual.end(), expected.begin(), expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(text_address_rejects_embedded_nul_suffix)
+{
+    const std::string ipv4{"127.0.0.1\0invalid", 17};
+    const std::string ipv6{"::1\0invalid", 11};
+    BOOST_CHECK_THROW(static_cast<void>(message::avp::Address{ipv4}), std::runtime_error);
+    BOOST_CHECK_THROW(message::avp::Address(message::avp::value::AddressFamilyV::IPv6, ipv6),
+        std::runtime_error);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
